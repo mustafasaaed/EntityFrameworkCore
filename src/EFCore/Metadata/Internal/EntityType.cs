@@ -180,10 +180,18 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             }
 
             var originalBaseType = _baseType;
+
             _baseType?._directlyDerivedTypes.Remove(this);
             _baseType = null;
+
             if (entityType != null)
             {
+                if (this.IsQueryType() != entityType.IsQueryType())
+                {
+                    throw new InvalidOperationException(
+                        CoreStrings.ErrorMixedQueryEntityTypeInheritance(entityType.DisplayName(), this.DisplayName()));
+                }
+
                 if (this.HasClrType())
                 {
                     if (!entityType.HasClrType())
