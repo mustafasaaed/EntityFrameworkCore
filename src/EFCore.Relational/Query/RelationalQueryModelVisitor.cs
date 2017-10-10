@@ -25,6 +25,7 @@ using Remotion.Linq.Clauses;
 using Remotion.Linq.Clauses.Expressions;
 using Remotion.Linq.Clauses.ExpressionVisitors;
 using Remotion.Linq.Clauses.ResultOperators;
+using Microsoft.EntityFrameworkCore.Query.Expressions.Internal;
 
 namespace Microsoft.EntityFrameworkCore.Query
 {
@@ -901,10 +902,21 @@ namespace Microsoft.EntityFrameworkCore.Query
                 {
                     if (_insideShapedQueryMethod)
                     {
+                        var shaperArgumentExpression = arguments[2];
+                        if (shaperArgumentExpression is ShaperWrappingExpression shaperWrappingExpression)
+                        {
+                            shaperArgumentExpression = shaperWrappingExpression.CompiledShaperExpression;
+                        }
+
                         return Expression.Call(
                             _relationalQueryCompilationContext.QueryMethodProvider.ShapedQueryMethod
-                                .MakeGenericMethod(((Shaper)((ConstantExpression)arguments[2]).Value).Type),
+                                .MakeGenericMethod(((Shaper)((ConstantExpression)shaperArgumentExpression).Value).Type),
                             arguments);
+
+                        //return Expression.Call(
+                        //    _relationalQueryCompilationContext.QueryMethodProvider.ShapedQueryMethod
+                        //        .MakeGenericMethod(((Shaper)((ConstantExpression)arguments[2]).Value).Type),
+                        //    arguments);
                     }
 
                     if (methodCallExpression.Method.MethodIsClosedFormOf(
@@ -1063,6 +1075,23 @@ namespace Microsoft.EntityFrameworkCore.Query
             Check.NotNull(selectClause, nameof(selectClause));
             Check.NotNull(queryModel, nameof(queryModel));
 
+            if (selectClause.ToString() == @"select new KeyValuePair`2(new KeyValuePair`2([od.Order.Customer.Orders], new AnonymousObject(new [] {Convert(Property([od.Order.Customer.Orders], ""CustomerID""))})), new AnonymousObject(new [] {[_od.Order.Customer].GetValue(1), [_od.Order.Customer].GetValue(2)}))")
+            {
+
+            }
+
+
+            if (selectClause.ToString() == @"select new KeyValuePair`2(new KeyValuePair`2([g.Weapons], new AnonymousObject(new [] {Convert(Property([g.Weapons], ""OwnerFullName""))})), new AnonymousObject(new [] {[_g].GetValue(1), [_g].GetValue(2)}))")
+            {
+
+            }
+
+
+            if (selectClause.ToString() == @"select new AnonymousObject2(new [] {Convert(EF.Property(?[g]?, ""FullName"")), Convert(EF.Property(?[g]?, ""Nickname"")), Convert(EF.Property(?[g]?, ""SquadId""))})")
+            {
+
+            }
+
             base.VisitSelectClause(selectClause, queryModel);
 
             if (Expression is MethodCallExpression methodCallExpression
@@ -1111,6 +1140,10 @@ namespace Microsoft.EntityFrameworkCore.Query
 
                             newShaper = newShaper ?? ProjectionShaper.Create(oldShaper, materializer);
 
+                            var shaperWrapper = new ShaperWrappingExpression(
+                                Expression.Constant(newShaper),
+                                materializer);
+
                             Expression =
                                 Expression.Call(
                                     shapedQuery.Method
@@ -1118,7 +1151,9 @@ namespace Microsoft.EntityFrameworkCore.Query
                                         .MakeGenericMethod(Expression.Type.GetSequenceType()),
                                     shapedQuery.Arguments[0],
                                     shapedQuery.Arguments[1],
-                                    Expression.Constant(newShaper));
+                                    shaperWrapper);
+
+                                    //Expression.Constant(newShaper));                        
                         }
                     }
                 }
@@ -1288,7 +1323,15 @@ namespace Microsoft.EntityFrameworkCore.Query
 
         private Shaper ExtractShaper(MethodCallExpression shapedQueryExpression, int offset)
         {
-            var shaper = (Shaper)((ConstantExpression)UnwrapShapedQueryExpression(shapedQueryExpression).Arguments[2]).Value;
+            var shaperArgument = UnwrapShapedQueryExpression(shapedQueryExpression).Arguments[2];
+            if (shaperArgument is ShaperWrappingExpression shaperWrappingExpression)
+            {
+                shaperArgument = shaperWrappingExpression.CompiledShaperExpression;
+            }
+
+            var shaper = (Shaper)((ConstantExpression)shaperArgument).Value;
+
+            //var shaper = (Shaper)((ConstantExpression)UnwrapShapedQueryExpression(shapedQueryExpression).Arguments[2]).Value;
 
             return shaper.WithOffset(offset);
         }
