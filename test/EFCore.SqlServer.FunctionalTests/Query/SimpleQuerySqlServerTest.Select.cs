@@ -546,5 +546,23 @@ END
 FROM [Orders] AS [o]
 WHERE [o].[CustomerID] = N'ALFKI'");
         }
+
+        public override void Projection_when_client_evald_subquery()
+        {
+            base.Projection_when_client_evald_subquery();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID]
+FROM [Customers] AS [c]
+ORDER BY [c].[CustomerID]",
+                //
+                @"SELECT [t].[CustomerID], [c.Orders].[CustomerID]
+FROM [Orders] AS [c.Orders]
+INNER JOIN (
+    SELECT [c0].[CustomerID]
+    FROM [Customers] AS [c0]
+) AS [t] ON [c.Orders].[CustomerID] = [t].[CustomerID]
+ORDER BY [t].[CustomerID]");
+        }
     }
 }

@@ -48,6 +48,12 @@ namespace Microsoft.EntityFrameworkCore.Query
         public static readonly ParameterExpression QueryContextParameter
             = Expression.Parameter(typeof(QueryContext), "queryContext");
 
+        /// <summary>
+        ///     Expression to reference the index of a current element in the selector
+        /// </summary>
+        public static readonly ParameterExpression SelectorIndexParameter
+            = Expression.Parameter(typeof(int), "index");
+
         private readonly IQueryOptimizer _queryOptimizer;
         private readonly INavigationRewritingExpressionVisitorFactory _navigationRewritingExpressionVisitorFactory;
         private readonly IQuerySourceTracingExpressionVisitorFactory _querySourceTracingExpressionVisitorFactory;
@@ -72,6 +78,7 @@ namespace Microsoft.EntityFrameworkCore.Query
 
         // TODO: Can these be non-blocking?
         private bool _blockTaskExpressions = true;
+        private bool _isAsyncQuery = false;
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="EntityQueryModelVisitor" /> class.
@@ -155,6 +162,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             Check.NotNull(queryModel, nameof(queryModel));
 
+            _isAsyncQuery = false;
             using (QueryCompilationContext.Logger.Logger.BeginScope(this))
             {
                 QueryCompilationContext.Logger.QueryModelCompiling(queryModel);
@@ -163,7 +171,7 @@ namespace Microsoft.EntityFrameworkCore.Query
 
                 ExtractQueryAnnotations(queryModel);
 
-                OptimizeQueryModel(queryModel, asyncQuery: false);
+                OptimizeQueryModel(queryModel, _isAsyncQuery);
 
                 QueryCompilationContext.FindQuerySourcesRequiringMaterialization(this, queryModel);
                 QueryCompilationContext.DetermineQueryBufferRequirement(queryModel);
@@ -191,6 +199,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             Check.NotNull(queryModel, nameof(queryModel));
 
+            _isAsyncQuery = true;
             using (QueryCompilationContext.Logger.Logger.BeginScope(this))
             {
                 QueryCompilationContext.Logger.QueryModelCompiling(queryModel);
@@ -199,7 +208,7 @@ namespace Microsoft.EntityFrameworkCore.Query
 
                 ExtractQueryAnnotations(queryModel);
 
-                OptimizeQueryModel(queryModel, asyncQuery: true);
+                OptimizeQueryModel(queryModel, _isAsyncQuery);
 
                 QueryCompilationContext.FindQuerySourcesRequiringMaterialization(this, queryModel);
                 QueryCompilationContext.DetermineQueryBufferRequirement(queryModel);
@@ -229,18 +238,18 @@ namespace Microsoft.EntityFrameworkCore.Query
                     Expression.Constant(QueryCompilationContext.Logger),
                     QueryContextParameter);
 
-        /// <summary>
-        ///     Rewrites collection navigation projections so that they can be handled by the Include pipeline.
-        /// </summary>
-        /// <param name="queryModel"> The query. </param>
-        protected virtual void RewriteProjectedCollectionNavigationsToIncludes([NotNull] QueryModel queryModel)
-        {
-            Check.NotNull(queryModel, nameof(queryModel));
+        ///// <summary>
+        /////     Rewrites collection navigation projections so that they can be handled by the Include pipeline.
+        ///// </summary>
+        ///// <param name="queryModel"> The query. </param>
+        //protected virtual void RewriteProjectedCollectionNavigationsToIncludes([NotNull] QueryModel queryModel)
+        //{
+        //    Check.NotNull(queryModel, nameof(queryModel));
 
-            var collectionNavigationIncludeRewriter = new CollectionNavigationIncludeExpressionRewriter(this);
-            queryModel.SelectClause.Selector = collectionNavigationIncludeRewriter.Visit(queryModel.SelectClause.Selector);
-            _queryCompilationContext.AddAnnotations(collectionNavigationIncludeRewriter.CollectionNavigationIncludeResultOperators);
-        }
+        //    var collectionNavigationIncludeRewriter = new CollectionNavigationIncludeExpressionRewriter(this);
+        //    queryModel.SelectClause.Selector = collectionNavigationIncludeRewriter.Visit(queryModel.SelectClause.Selector);
+        //    _queryCompilationContext.AddAnnotations(collectionNavigationIncludeRewriter.CollectionNavigationIncludeResultOperators);
+        //}
 
         /// <summary>
         ///     Populates <see cref="Query.QueryCompilationContext.QueryAnnotations" /> based on annotations found in the query.
@@ -275,16 +284,23 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             // Rewrite includes/navigations
 
-            RewriteProjectedCollectionNavigationsToIncludes(queryModel);
+            //RewriteProjectedCollectionNavigationsToIncludes(queryModel);
+
+            queryModel.TransformExpressions(new SubqueryUniquefyingExpressionVisitor().Visit);
 
             var includeCompiler = new IncludeCompiler(QueryCompilationContext, _querySourceTracingExpressionVisitorFactory);
 
             includeCompiler.CompileIncludes(queryModel, TrackResults(queryModel), asyncQuery);
 
+            queryModel.TransformExpressions(new SubqueryUniquefyingExpressionVisitor().Visit);
             queryModel.TransformExpressions(new CollectionNavigationSubqueryInjector(this).Visit);
             queryModel.TransformExpressions(new CollectionNavigationSetOperatorSubqueryInjector(this).Visit);
 
             var navigationRewritingExpressionVisitor = _navigationRewritingExpressionVisitorFactory.Create(this);
+            navigationRewritingExpressionVisitor.InjectSubqueryToCollectionsInProjection(queryModel);
+
+            var correlatedCollectionFinder = new CorrelatedCollectionFindingExpressionVisitor(this);
+            queryModel.SelectClause.TransformExpressions(correlatedCollectionFinder.Visit);
 
             navigationRewritingExpressionVisitor.Rewrite(queryModel, parentQueryModel: null);
 
@@ -1011,6 +1027,33 @@ namespace Microsoft.EntityFrameworkCore.Query
         }
 
         /// <summary>
+        ///     Optimizes correlated collection navigations when possible
+        /// </summary>
+        /// <param name="queryModel"> Query model to run optimizations on. </param>
+        /// <returns> True if the query model was optimized, false otherwise. </returns>
+        protected virtual bool TryOptimizeCorrelatedCollections(QueryModel queryModel)
+        {
+            var correlatedCollectionOptimizer = new CorrelatedCollectionOptimizingVisitor(
+                QueryCompilationContext, 
+                new Dictionary<JoinClause, Tuple<GroupJoinClause, AdditionalFromClause>>(),
+                queryModel,
+                SelectorIndexParameter,
+                canOptimizeCorrelatedCollections: true);
+
+            var newSelector = correlatedCollectionOptimizer.Visit(queryModel.SelectClause.Selector);
+            if (newSelector != queryModel.SelectClause.Selector)
+            {
+                queryModel.SelectClause.Selector = newSelector;
+
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
         ///     Visits <see cref="SelectClause" /> nodes.
         /// </summary>
         /// <param name="selectClause"> The node being visited. </param>
@@ -1026,6 +1069,14 @@ namespace Microsoft.EntityFrameworkCore.Query
                 && selectClause.Selector is QuerySourceReferenceExpression)
             {
                 return;
+            }
+
+            var optimizedCorrelatedCollections = false;
+
+            // TODO: for now optimization only works for sync queries
+            if (!_isAsyncQuery)
+            {
+                optimizedCorrelatedCollections = TryOptimizeCorrelatedCollections(queryModel);
             }
 
             var selector
@@ -1051,22 +1102,34 @@ namespace Microsoft.EntityFrameworkCore.Query
                     asyncSelector = taskLiftingExpressionVisitor.LiftTasks(selector);
                 }
 
-                _expression
-                    = asyncSelector == selector
-                        ? Expression.Call(
-                            LinqOperatorProvider.Select
+                if (optimizedCorrelatedCollections)
+                {
+                    _expression
+                        = Expression.Call(
+                            LinqOperatorProvider.SelectIndex
                                 .MakeGenericMethod(CurrentParameter.Type, selector.Type),
                             _expression,
-                            Expression.Lambda(selector, CurrentParameter))
-                        : Expression.Call(
-                            _selectAsync
-                                .MakeGenericMethod(CurrentParameter.Type, selector.Type),
-                            _expression,
-                            Expression.Lambda(
-                                asyncSelector,
-                                CurrentParameter,
-                                taskLiftingExpressionVisitor.CancellationTokenParameter
-                                ?? Expression.Parameter(typeof(CancellationToken), name: "ct")));
+                            Expression.Lambda(selector, CurrentParameter, SelectorIndexParameter));
+                }
+                else
+                {
+                    _expression
+                        = asyncSelector == selector
+                            ? Expression.Call(
+                                LinqOperatorProvider.Select
+                                    .MakeGenericMethod(CurrentParameter.Type, selector.Type),
+                                _expression,
+                                Expression.Lambda(selector, CurrentParameter))
+                            : Expression.Call(
+                                _selectAsync
+                                    .MakeGenericMethod(CurrentParameter.Type, selector.Type),
+                                _expression,
+                                Expression.Lambda(
+                                    asyncSelector,
+                                    CurrentParameter,
+                                    taskLiftingExpressionVisitor.CancellationTokenParameter
+                                    ?? Expression.Parameter(typeof(CancellationToken), name: "ct")));
+                }
             }
         }
 

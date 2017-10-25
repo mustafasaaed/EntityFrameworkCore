@@ -665,6 +665,22 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
                 }
             }
 
+            if (AnonymousObject2.IsGetValueExpression(methodCallExpression, out var querySourceReferenceExpression2))
+            {
+                var selectExpression
+                    = _queryModelVisitor.TryGetQuery(querySourceReferenceExpression2.ReferencedQuerySource);
+
+                if (selectExpression != null)
+                {
+                    var projectionIndex
+                        = (int)((ConstantExpression)methodCallExpression.Arguments.Single()).Value;
+
+                    return selectExpression.BindSubqueryProjectionIndex(
+                        projectionIndex,
+                        querySourceReferenceExpression2.ReferencedQuerySource);
+                }
+            }
+
             return TryBindMemberOrMethodToSelectExpression(
                        methodCallExpression, (expression, visitor, binder)
                            => visitor.BindMethodCallExpression(expression, binder))
@@ -879,6 +895,22 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
                     return Expression.Constant(memberBindings);
                 }
             }
+            else if (expression.Type == typeof(AnonymousObject2))
+            {
+                var propertyCallExpressions
+                    = ((NewArrayExpression)expression.Arguments.Single()).Expressions;
+
+                var memberBindings
+                    = propertyCallExpressions
+                        .Select(Visit)
+                        .Where(e => e != null)
+                        .ToArray();
+
+                if (memberBindings.Length == propertyCallExpressions.Count)
+                {
+                    return Expression.Constant(memberBindings);
+                }
+            }
 
             return null;
         }
@@ -1027,6 +1059,12 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
         protected override Expression VisitParameter(ParameterExpression expression)
         {
             Check.NotNull(expression, nameof(expression));
+
+            // don't translate select index parameters
+            if (expression == EntityQueryModelVisitor.SelectorIndexParameter)
+            {
+                return null;
+            }
 
             var underlyingType = expression.Type.UnwrapNullableType().UnwrapEnumType();
 

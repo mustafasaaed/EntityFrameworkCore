@@ -492,6 +492,22 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        public virtual MethodInfo SelectIndex => _selectIndex;
+
+        private static readonly MethodInfo _selectIndex
+            = typeof(LinqOperatorProvider)
+                .GetTypeInfo().GetDeclaredMethod(nameof(_SelectIndex));
+
+        [UsedImplicitly]
+        // ReSharper disable once InconsistentNaming
+        private static IEnumerable<TResult> _SelectIndex<TSource, TResult>(
+            IEnumerable<TSource> source, Func<TSource, int, TResult> selector)
+            => source.Select(selector);
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public virtual MethodInfo OrderBy => _orderBy;
 
         private static readonly MethodInfo _orderBy

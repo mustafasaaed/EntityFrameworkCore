@@ -32,6 +32,29 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         private readonly Dictionary<int, IDisposable> _includedCollections
             = new Dictionary<int, IDisposable>(); // IDisposable as IEnumerable/IAsyncEnumerable
 
+        private Dictionary<int, ChildCollectionMetadataElement> _childCollectionMetadata
+            = new Dictionary<int, ChildCollectionMetadataElement>();
+
+        private struct ChildCollectionMetadataElement
+        {
+            public ChildCollectionMetadataElement(
+                IDisposable enumerator, 
+                int lastOuterElementIndex, 
+                int maxInnerElementIndex, 
+                Tuple<object, AnonymousObject2> previous)
+            {
+                Enumerator = enumerator;
+                LastOuterElementIndex = lastOuterElementIndex;
+                MaxInnerElementIndex = maxInnerElementIndex;
+                Previous = previous;
+            }
+
+            public IDisposable Enumerator { get; set; }
+            public int LastOuterElementIndex { get; set; }
+            public int MaxInnerElementIndex { get; set; }
+            public Tuple<object, AnonymousObject2> Previous { get; set; }
+        }
+
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
@@ -473,6 +496,106 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             }
 
             return identityMap;
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual IEnumerable<TInner> CorrelateSubquery<TInner>(
+            int childCollectionId,
+            int outerElementIndex,
+            INavigation navigation,
+            AnonymousObject2 outerKey,
+            Func<IEnumerable<Tuple<TInner, AnonymousObject2, AnonymousObject2>>> childCollectionElementFactory,
+            Func<AnonymousObject2, AnonymousObject2, bool> correlationnPredicate)
+        {
+            IDisposable untypedEnumerator = null;
+            ChildCollectionMetadataElement childCollectionMetadataElement;
+            IEnumerator<Tuple<TInner, AnonymousObject2, AnonymousObject2>> enumerator = null;
+
+            if (!_childCollectionMetadata.TryGetValue(childCollectionId, out childCollectionMetadataElement))
+            {
+                enumerator = childCollectionElementFactory().GetEnumerator();
+
+                childCollectionMetadataElement = new ChildCollectionMetadataElement(enumerator, -1, -1, default);
+                _childCollectionMetadata[childCollectionId] = childCollectionMetadataElement;
+            }
+            else
+            {
+                untypedEnumerator = childCollectionMetadataElement.Enumerator;
+            }
+
+            if (enumerator == null)
+            {
+                if (untypedEnumerator == null)
+                {
+                    yield break;
+                }
+
+                enumerator = (IEnumerator<Tuple<TInner, AnonymousObject2, AnonymousObject2>>)untypedEnumerator;
+            }
+
+            // = 1 - sequential
+            // > 1 - skipping forward, need to go thru reader until matching element is found or reaching end of the reader
+            // < 1 - got back to earlier element, need to reset reader and then look for elements till find a match (just like with skipping forward case)
+            var outerElementAccessDirection = outerElementIndex - childCollectionMetadataElement.LastOuterElementIndex;
+            if (outerElementAccessDirection < 1)
+            {
+                enumerator.Dispose();
+                enumerator = childCollectionElementFactory().GetEnumerator();
+                childCollectionMetadataElement.Enumerator = enumerator;
+                childCollectionMetadataElement.Previous = default;
+            }
+
+            childCollectionMetadataElement.LastOuterElementIndex = outerElementIndex;
+            _childCollectionMetadata[childCollectionId] = childCollectionMetadataElement;
+            
+            var foundMatchingElement = false;
+            while (true)
+            {
+                bool shouldCorrelate = false;
+
+                if (childCollectionMetadataElement.Previous != null)
+                {
+                    shouldCorrelate = correlationnPredicate(outerKey, childCollectionMetadataElement.Previous.Item2);
+                }
+                else
+                {
+                    if (!enumerator.MoveNext())
+                    {
+                        enumerator.Dispose();
+                        _childCollectionMetadata[childCollectionId] = default;
+
+                        break;
+                    }
+
+                    shouldCorrelate = correlationnPredicate(outerKey, enumerator.Current.Item2);
+                }
+
+                foundMatchingElement |= shouldCorrelate;
+                childCollectionMetadataElement.Previous = default;
+
+                if (shouldCorrelate)
+                {
+                    _childCollectionMetadata[childCollectionId] = childCollectionMetadataElement;
+
+                    yield return enumerator.Current.Item1;
+                }
+                else
+                {
+                    // if the current element is not correlated with the parent, store it for the next comparison
+                    if (outerElementAccessDirection == 1 || foundMatchingElement)
+                    {
+                        childCollectionMetadataElement.Previous = new Tuple<object, AnonymousObject2>(enumerator.Current.Item1, enumerator.Current.Item2);
+                        _childCollectionMetadata[childCollectionId] = childCollectionMetadataElement;
+
+                        // if inner element doesnt match and we are in sequential access mode, this means that all inners for a given outer have been iterated over and we can break;
+                        // in case of non-sequential access, we can only stop iterating if we have found a match earlier - otherwise we need to keep looking, until we find a match or reach end of the stream
+                        break;
+                    }
+                }
+            }
         }
 
         void IDisposable.Dispose()

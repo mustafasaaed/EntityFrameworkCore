@@ -3073,6 +3073,231 @@ namespace Microsoft.EntityFrameworkCore.Query
                         .Select(g => g.Rank.ToString()));
         }
 
+        [ConditionalFact]
+        public virtual void BasicProjection()
+        {
+            using (var ctx = CreateContext())
+            {
+
+                var query = ctx.Gears.Where(g => g.Nickname != "Marcus").Select(g => g.Weapons.Where(w => w.IsAutomatic || w.Name != "foo"));
+                var outers = query.ToList();
+                foreach (var outer in outers)
+                {
+                    var inners = outer.ToList();
+                }
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void BasicProjectionComposite()
+        {
+            using (var ctx = CreateContext())
+            {
+                var query = ctx.Gears.OfType<Officer>().Where(o => o.Nickname != "Foo").Select(o => o.Reports.Where(g => !g.HasSoulPatch).Select(g => new { g.Nickname, g.FullName }));
+                var outers = query.ToList();
+                foreach (var outer in outers)
+                {
+                    var inners = outer.ToList();
+                }
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void BasicProjectionNested()
+        {
+            using (var ctx = CreateContext())
+            {
+                var query = ctx.Gears.Where(g => g.Nickname != "Marcus").Select(g => g.Squad.Missions.Where(m => m.MissionId != 17));
+                var outers = query.ToList();
+                foreach (var outer in outers)
+                {
+                    var inners = outer.ToList();
+                }
+            }
+        }
+
+        // TODO: improve this test
+
+        //[ConditionalFact]
+        public virtual void ProjectionAnonymous()
+        {
+
+            //var foo = Enumerable.Range(10, 20).Select((a, i) => new { a, i });
+
+
+
+            //foreach (var f in foo)
+            //{
+            //    Console.WriteLine(f);
+            //}
+
+
+
+            using (var ctx = CreateContext())
+            {
+                var query = ctx.Squads.Where(s => s.Id < 20).Select(s => new { s.Name, Collection = s.Members./*Where(m => !m.HasSoulPatch).*/Select(m => new { m.FullName, m.Rank }) });
+                var result = query.ToList();
+
+
+                foreach (var r in result)
+                {
+
+                    var enumerator1 = r.Collection.GetEnumerator();
+
+                    enumerator1.MoveNext();
+                    enumerator1.MoveNext();
+
+                    var foo1 = r.Collection.ToList();
+                    var foo2 = r.Collection.ToList();
+                }
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collection_nested()
+        {
+            using (var ctx = CreateContext())
+            {
+                var query = ctx.Squads.Select(s => s.Missions.Where(m => m.MissionId < 42).Select(m => m.Mission.ParticipatingSquads.Where(ps => ps.SquadId < 7)));
+
+                var squads = query.ToList();
+
+                foreach (var squad in squads)
+                {
+                    var missions = squad.ToList();
+                    foreach (var mission in missions)
+                    {
+                        var participatingSquads = mission.ToList();
+                    }
+                }
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collection_nested2()
+        {
+            using (var ctx = CreateContext())
+            {
+                var query = ctx.Gears
+                    .OfType<Officer>()
+                    .OrderByDescending(o => o.HasSoulPatch)
+                    .Select(o => o.Reports
+                        .Where(r => r.FullName != "Foo")
+                        .OrderBy(r => r.Rank)
+                        .Select(g => g.Weapons
+                            .Where(w => w.Name != "Bar")
+                            .OrderBy(w => w.IsAutomatic)));
+
+                var officers = query.ToList();
+
+                foreach (var officer in officers)
+                {
+                    var reports = officer.ToList();
+                    foreach (var report in reports)
+                    {
+                        var weapons = report.ToList();
+                    }
+                }
+            }
+        }
+
+
+
+        //[ConditionalFact]
+        //public virtual void Correlated_collection_single()
+        //{
+        //    using (var ctx = CreateContext())
+        //    {
+        //        var query = ctx.Squads.Select(s => s.Missions.Where(m => m.MissionId < 42));
+
+        //        var squads = query.ToList();
+
+        //        foreach (var squad in squads)
+        //        {
+        //            var missions = squad.ToList();
+        //        }
+        //    }
+        //}
+
+
+
+        //[ConditionalFact]
+        //public virtual void Correlated_collection_nested_includes()
+        //{
+        //    using (var ctx = CreateContext())
+        //    {
+
+        //        var query = ctx.Squads.Include(s => s.Missions).ThenInclude(m => m.Mission.ParticipatingSquads);
+        //        //var query = ctx.Squads.Include("Missions.ParticipatingSquads");
+
+        //        var squads = query.ToList();
+        //    }
+        //}
+
+
+        // TODO: broken case!!! (without MARS)
+        //[ConditionalFact]
+        public virtual void Correlated_collection_random_access_on_outer()
+        {
+            using (var ctx = CreateContext())
+            {
+                var query = ctx.Cities.OrderBy(c => c.Name).Where(c  => c.Name != "Foo").Select(c => new { c.Name, Collection = c.BornGears.Select(g => new { g.FullName, g.Rank, g.CityOfBirth.Name }) });
+                var result = query.ToList();
+
+                // jump forward
+                var gears1 = result[1].Collection.ToList();
+                Assert.Equal(1, gears1.Count);
+                Assert.Equal(result[1].Name, gears1[0].Name);
+
+                // same value again
+                var gears12 = result[1].Collection.ToList();
+                Assert.Equal(1, gears12.Count);
+                Assert.Equal(result[1].Name, gears12[0].Name);
+
+                // jump back
+                var gears0 = result[0].Collection.ToList();
+                Assert.Equal(1, gears0.Count);
+                Assert.Equal(result[0].Name, gears0[0].Name);
+
+                // sequential
+                var gears13 = result[1].Collection.ToList();
+                Assert.Equal(1, gears13.Count);
+                Assert.Equal(result[1].Name, gears13[0].Name);
+
+                // read till the end
+                var gears2 = result[2].Collection.ToList();
+                Assert.Equal(1, gears2.Count);
+                Assert.Equal(result[2].Name, gears2[0].Name);
+
+                // jump forward after reading till the end
+                var gears22 = result[2].Collection.ToList();
+                Assert.Equal(1, gears22.Count);
+                Assert.Equal(result[2].Name, gears22[0].Name);
+
+                // start from beginning after reading till the end
+                var gears02 = result[0].Collection.ToList();
+                Assert.Equal(1, gears02.Count);
+                Assert.Equal(result[0].Name, gears02[0].Name);
+
+                // jump forward after reading something first
+                var gears23 = result[2].Collection.ToList();
+                Assert.Equal(1, gears23.Count);
+                Assert.Equal(result[2].Name, gears23[0].Name);
+            }
+
+
+            AssertSingleResult<Gear, CogTag>(
+                (gs, ts) => gs
+                    .GroupJoin(
+                        ts,
+                        g => new { k1 = g.Nickname, k2 = (int?)g.SquadId },
+                        t => new { k1 = t.GearNickName, k2 = t.GearSquadId },
+                        (g, t) => g)
+                    .Count());
+        }
+
+
+
         protected GearsOfWarContext CreateContext() => Fixture.CreateContext();
 
         protected virtual void ClearLog()

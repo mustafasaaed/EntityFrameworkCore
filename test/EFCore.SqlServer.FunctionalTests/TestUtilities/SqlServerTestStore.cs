@@ -62,7 +62,7 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
                 _scriptPath = Path.Combine(Path.GetDirectoryName(typeof(SqlServerTestStore).GetTypeInfo().Assembly.Location), scriptPath);
             }
 
-            ConnectionString = CreateConnectionString(Name, _fileName, multipleActiveResultSets);
+            ConnectionString = CreateConnectionString(Name, _fileName, /*multipleActiveResultSets*/ false);
             Connection = new SqlConnection(ConnectionString);
         }
 
