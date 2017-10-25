@@ -964,6 +964,16 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             return new NullConditionalEqualExpression(outerNullProtection, leftExpression, rightExpression);
         }
 
+
+
+
+
+        private bool _insideCorrelatedCollection = false;
+
+
+
+
+
         private Expression RewriteNavigationsIntoJoins(
             QuerySourceReferenceExpression outerQuerySourceReferenceExpression,
             IEnumerable<INavigation> navigations,
@@ -991,32 +1001,39 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 
                 if (navigation.IsCollection())
                 {
-                    _queryModel.MainFromClause.FromExpression
-                        = NullAsyncQueryProvider.Instance.CreateEntityQueryableExpression(targetEntityType.ClrType);
+                    if (_insideCorrelatedCollection)
+                    {
+                        return propertyCreator(querySourceReferenceExpression);
+                    }
+                    else
+                    {
+                        _queryModel.MainFromClause.FromExpression
+                            = NullAsyncQueryProvider.Instance.CreateEntityQueryableExpression(targetEntityType.ClrType);
 
-                    var innerQuerySourceReferenceExpression
-                        = new QuerySourceReferenceExpression(_queryModel.MainFromClause);
+                        var innerQuerySourceReferenceExpression
+                            = new QuerySourceReferenceExpression(_queryModel.MainFromClause);
 
-                    var leftKeyAccess = CreateKeyAccessExpression(
-                        querySourceReferenceExpression,
-                        navigation.IsDependentToPrincipal()
-                            ? navigation.ForeignKey.Properties
-                            : navigation.ForeignKey.PrincipalKey.Properties);
+                        var leftKeyAccess = CreateKeyAccessExpression(
+                            querySourceReferenceExpression,
+                            navigation.IsDependentToPrincipal()
+                                ? navigation.ForeignKey.Properties
+                                : navigation.ForeignKey.PrincipalKey.Properties);
 
-                    var rightKeyAccess = CreateKeyAccessExpression(
-                        innerQuerySourceReferenceExpression,
-                        navigation.IsDependentToPrincipal()
-                            ? navigation.ForeignKey.PrincipalKey.Properties
-                            : navigation.ForeignKey.Properties);
+                        var rightKeyAccess = CreateKeyAccessExpression(
+                            innerQuerySourceReferenceExpression,
+                            navigation.IsDependentToPrincipal()
+                                ? navigation.ForeignKey.PrincipalKey.Properties
+                                : navigation.ForeignKey.Properties);
 
-                    _queryModel.BodyClauses.Add(
-                        new WhereClause(
-                            CreateKeyComparisonExpressionForCollectionNavigationSubquery(
-                                leftKeyAccess,
-                                rightKeyAccess,
-                                querySourceReferenceExpression)));
+                        _queryModel.BodyClauses.Add(
+                            new WhereClause(
+                                CreateKeyComparisonExpressionForCollectionNavigationSubquery(
+                                    leftKeyAccess,
+                                    rightKeyAccess,
+                                    querySourceReferenceExpression)));
 
-                    return _queryModel.MainFromClause.FromExpression;
+                        return _queryModel.MainFromClause.FromExpression;
+                    }
                 }
 
                 var navigationJoin
@@ -1599,5 +1616,613 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 adjuster(resultOperator, translatedExpression);
             }
         }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public void InjectSubqueryToCollectionsInProjection(QueryModel queryModel)
+        {
+            var visitor = new ProjectionSubqueryInjectingQueryModelVisitor(_queryModelVisitor);
+            visitor.VisitQueryModel(queryModel);
+        }
+
+        private class ProjectionSubqueryInjectingQueryModelVisitor : QueryModelVisitorBase
+        {
+            private readonly CollectionNavigationSubqueryInjector _subqueryInjector;
+
+            public ProjectionSubqueryInjectingQueryModelVisitor(EntityQueryModelVisitor queryModelVisitor)
+            {
+                _subqueryInjector = new CollectionNavigationSubqueryInjector(queryModelVisitor, shouldInject: true);
+            }
+
+            public override void VisitSelectClause(SelectClause selectClause, QueryModel queryModel)
+            {
+                selectClause.Selector = _subqueryInjector.Visit(selectClause.Selector);
+
+                base.VisitSelectClause(selectClause, queryModel);
+            }
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public void MarkCorrelatedCollections(QueryModel queryModel)
+        {
+            var correlatedCollectionMarker = new CorrelatedCollectionMarkingExpressionVisitor(_queryModelVisitor);
+
+            queryModel.SelectClause.TransformExpressions(correlatedCollectionMarker.Visit);
+
+            //queryModel.TransformExpressions(correlatedCollectionMarker.Visit);
+        }
+
+        private class CorrelatedCollectionMarkingExpressionVisitor : RelinqExpressionVisitor
+        {
+            private EntityQueryModelVisitor _queryModelVisitor;
+
+            public CorrelatedCollectionMarkingExpressionVisitor(EntityQueryModelVisitor queryModelVisitor)
+            {
+                _queryModelVisitor = queryModelVisitor;
+            }
+
+            protected override Expression VisitMethodCall(MethodCallExpression node)
+            {
+                if (node.Method.Name.StartsWith("IncludeCollection"))
+                {
+                    return node;
+                }
+
+                return base.VisitMethodCall(node);
+            }
+
+            // todo: dry
+            private class QuerySourceReferenceFindingExpressionTreeVisitor : RelinqExpressionVisitor
+            {
+                public QuerySourceReferenceExpression QuerySourceReferenceExpression { get; private set; }
+
+                protected override Expression VisitQuerySourceReference(QuerySourceReferenceExpression querySourceReferenceExpression)
+                {
+                    if (QuerySourceReferenceExpression == null)
+                    {
+                        QuerySourceReferenceExpression = querySourceReferenceExpression;
+                    }
+
+                    return querySourceReferenceExpression;
+                }
+            }
+
+            protected override Expression VisitSubQuery(SubQueryExpression expression)
+            {
+                var subQueryModel = expression.QueryModel;
+                if (subQueryModel.ResultOperators.Count == 0
+                    && subQueryModel.SelectClause.Selector is QuerySourceReferenceExpression selectorQsre
+                    && selectorQsre.ReferencedQuerySource == subQueryModel.MainFromClause)
+                {
+                    var newExpression = _queryModelVisitor.BindNavigationPathPropertyExpression(
+                        subQueryModel.MainFromClause.FromExpression,
+                        (properties, querySource) =>
+                        {
+                            var collectionNavigation = properties.OfType<INavigation>().SingleOrDefault(n => n.IsCollection());
+
+                            return collectionNavigation != null
+                                ? new CorrelatedCollectionMarkingExpression(expression, querySource, properties.OfType<INavigation>().First(), collectionNavigation)
+                                : default;
+                        });
+
+                    if (newExpression != null)
+                    {
+                        return newExpression;
+                    }
+                }
+
+                if (subQueryModel.ResultOperators.Count == 0)
+                {
+                    var querySourceReferenceFindingExpressionTreeVisitor
+                        = new QuerySourceReferenceFindingExpressionTreeVisitor();
+
+                    querySourceReferenceFindingExpressionTreeVisitor.Visit(subQueryModel.SelectClause.Selector);
+                    if (querySourceReferenceFindingExpressionTreeVisitor.QuerySourceReferenceExpression?.ReferencedQuerySource == subQueryModel.MainFromClause)
+                    {
+                        var newExpression = _queryModelVisitor.BindNavigationPathPropertyExpression(
+                            subQueryModel.MainFromClause.FromExpression,
+                            (properties, querySource) =>
+                            {
+                                var collectionNavigation = properties.OfType<INavigation>().SingleOrDefault(n => n.IsCollection());
+
+                                return collectionNavigation != null
+                                    ? new CorrelatedCollectionMarkingExpression(expression, querySource, properties.OfType<INavigation>().First(), collectionNavigation)
+                                    : default;
+                            });
+
+                        if (newExpression != null)
+                        {
+                            return newExpression;
+                        }
+                    }
+                }
+
+                return base.VisitSubQuery(expression);
+            }
+        }
+
+        private class CorrelatedCollectionMarkingExpression : Expression
+        {
+            private readonly Type _type;
+
+            public CorrelatedCollectionMarkingExpression(
+                SubQueryExpression operand,
+                IQuerySource originQuerySource,
+                INavigation firstNavigation,
+                INavigation lastNavigation)
+            {
+                Operand = operand;
+                OriginQuerySource = originQuerySource;
+                FirstNavigation = firstNavigation;
+                LastNavigation = lastNavigation;
+                _type = operand.Type;
+            }
+
+            public virtual SubQueryExpression Operand { get; }
+
+            public virtual IQuerySource OriginQuerySource { get; set; }
+
+            public virtual INavigation FirstNavigation { get; }
+
+            public virtual INavigation LastNavigation { get; }
+
+            public override bool CanReduce => true;
+            public override Type Type => _type;
+            public override ExpressionType NodeType => ExpressionType.Extension;
+
+            public override Expression Reduce()
+                => Operand;
+
+            protected override Expression VisitChildren(ExpressionVisitor visitor)
+                => this;
+
+            public override string ToString()
+                => $"{nameof(CorrelatedCollectionMarkingExpression)}({Operand})";
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public void CorrelateSubqueries(QueryModel queryModel)
+        {
+
+            var subqueryCorrelatingExpressionVisitor = new SubqueryCorrelatingExpressionVisitor(_queryModelVisitor, queryModel);
+            queryModel.TransformExpressions(subqueryCorrelatingExpressionVisitor.Visit);
+        }
+
+        private class SubqueryCorrelatingExpressionVisitor : RelinqExpressionVisitor
+        {
+            private readonly EntityQueryModelVisitor _queryModelVisitor;
+            private QueryModel _queryModel;
+            private int _correlatedCollectionCount = 0;
+
+            public SubqueryCorrelatingExpressionVisitor(EntityQueryModelVisitor queryModelVisitor, QueryModel queryModel)
+            {
+                _queryModelVisitor = queryModelVisitor;
+                _queryModel = queryModel;
+            }
+
+            // todo: dry
+            private class QuerySourceReferenceFindingExpressionTreeVisitor : RelinqExpressionVisitor
+            {
+                public QuerySourceReferenceExpression QuerySourceReferenceExpression { get; private set; }
+
+                protected override Expression VisitQuerySourceReference(QuerySourceReferenceExpression querySourceReferenceExpression)
+                {
+                    if (QuerySourceReferenceExpression == null)
+                    {
+                        QuerySourceReferenceExpression = querySourceReferenceExpression;
+                    }
+
+                    return querySourceReferenceExpression;
+                }
+            }
+
+
+
+
+            protected override Expression VisitMethodCall(MethodCallExpression node)
+            {
+                if (node.Method.Name.StartsWith("IncludeCollection"))
+                {
+                    return node;
+                }
+
+                return base.VisitMethodCall(node);
+            }
+
+            protected override Expression VisitExtension(Expression node)
+            {
+                if (node is CorrelatedCollectionMarkingExpression correlatedCollectionMarkingExpression)
+                {
+                    return _queryModelVisitor.BindNavigationPathPropertyExpression(
+                        correlatedCollectionMarkingExpression.Operand.QueryModel.MainFromClause.FromExpression,
+                        (properties, querySource) =>
+                        {
+                            var collectionNavigation = properties.OfType<INavigation>().SingleOrDefault(n => n.IsCollection());
+
+                            return CorrelateSubquery2(
+                                new QuerySourceReferenceExpression(correlatedCollectionMarkingExpression.OriginQuerySource),
+                                new QuerySourceReferenceExpression(querySource),
+                                correlatedCollectionMarkingExpression.FirstNavigation,
+                                correlatedCollectionMarkingExpression.LastNavigation,
+                                correlatedCollectionMarkingExpression.Operand);
+                        });
+                }
+
+                return base.VisitExtension(node);
+            }
+
+            private static MethodInfo _correlateSubqueryMethodInfo = typeof(IQueryBuffer).GetMethod(nameof(IQueryBuffer.CorrelateSubquery));
+
+            private List<QueryModel> _processedQueryModels = new List<QueryModel>();
+
+            private Dictionary<QueryModel, Type> _processedQueryModelsMap = new Dictionary<QueryModel, Type>();
+
+            private Expression CorrelateSubquery2(
+                QuerySourceReferenceExpression originQuerySourceExpression,
+                QuerySourceReferenceExpression outerExpression,
+                INavigation firstNavigation,
+                INavigation collectionNavigation,
+                SubQueryExpression subQueryExpression)
+            {
+                var subQueryModel = subQueryExpression.QueryModel;
+
+                var outerKey = BuildKeyAccess(collectionNavigation.ForeignKey.PrincipalKey.Properties, outerExpression);
+                var innerKey = BuildKeyAccess(collectionNavigation.ForeignKey.Properties, new QuerySourceReferenceExpression(subQueryModel.MainFromClause));
+                var correlationnPredicate = CreateCorrelationPredicate(collectionNavigation);
+
+
+                if (_processedQueryModels.Contains(subQueryModel))
+                {
+                    subQueryModel = subQueryModel.Clone();
+                }
+                else
+                {
+                    _processedQueryModels.Add(subQueryModel);
+                }
+
+                var subQueryResultElementType = subQueryModel.SelectClause.Selector.Type;
+
+
+
+                //                if (!_processedQueryModelsMap.TryGetValue(subQueryModel, out var subQueryResultElementType))
+                {
+                    //var subQueryResultElementType = subQueryModel.SelectClause.Selector.Type;
+                    //_processedQueryModelsMap.Add(subQueryModel, subQueryResultElementType);
+
+
+                    //}
+
+                    //if (!_processedQueryModels.Contains(subQueryModel))
+                    //{
+                    //    _processedQueryModels.Add(subQueryModel);
+
+                    var kvp = typeof(KeyValuePair<,>).MakeGenericType(subQueryResultElementType, typeof(AnonymousObject2));
+                    var kvpCtor = kvp.GetTypeInfo().DeclaredConstructors.FirstOrDefault();
+
+                    var kvp2 = typeof(KeyValuePair<,>).MakeGenericType(kvp, typeof(AnonymousObject2));
+                    var kvp2Ctor = kvp2.GetTypeInfo().DeclaredConstructors.FirstOrDefault();
+
+                    var originEntityType = _queryModelVisitor.QueryCompilationContext.Model.FindEntityType(originQuerySourceExpression.Type);
+                    var originKey = BuildKeyAccess(originEntityType.FindPrimaryKey().Properties, originQuerySourceExpression);
+
+                    subQueryModel.SelectClause.Selector = Expression.New(
+                        kvp2Ctor,
+                        Expression.New(kvpCtor, subQueryModel.SelectClause.Selector, innerKey),
+                        originKey);
+
+                    //subQueryModel.SelectClause.Selector = Expression.New(kvpCtor, subQueryModel.SelectClause.Selector, innerKey);
+                    subQueryModel.ResultTypeOverride = typeof(IEnumerable<>).MakeGenericType(subQueryModel.SelectClause.Selector.Type);
+                }
+
+                var arguments = new List<Expression>
+                    {
+                        Expression.Constant(_correlatedCollectionCount++),
+                        originQuerySourceExpression,
+                        Expression.Constant(collectionNavigation),
+                        Expression.Constant(firstNavigation),
+                        outerKey,
+                        Expression.Lambda(new SubQueryExpression(subQueryModel)),
+                        correlationnPredicate
+                    };
+
+                var generic = _correlateSubqueryMethodInfo.MakeGenericMethod(subQueryResultElementType);
+
+                var result = Expression.Call(
+                    Expression.Property(
+                        EntityQueryModelVisitor.QueryContextParameter,
+                        nameof(QueryContext.QueryBuffer)),
+                    generic,
+                    arguments);
+
+                return result;
+            }
+
+            private static Expression BuildKeyAccess(IEnumerable<IProperty> keyProperties, Expression qsre)
+            {
+                var keyAccessExpressions = keyProperties.Select(p => qsre.CreateEFPropertyExpression(p)).ToArray();
+
+                return Expression.New(
+                    AnonymousObject2.AnonymousObjectCtor,
+                    Expression.NewArrayInit(
+                        typeof(object),
+                        keyAccessExpressions.Select(k => Expression.Convert(k, typeof(object)))));
+            }
+
+            private static Expression BuildOuterKey(INavigation navigation, Expression outerQsre)
+            {
+                var foreignKey = navigation.ForeignKey;
+                var primaryKeyProperties = foreignKey.PrincipalKey.Properties;
+
+                var pks = primaryKeyProperties.Select(p => Expression.MakeMemberAccess(outerQsre, p.GetMemberInfo(forConstruction: false, forSet: false))).ToArray();
+
+                return Expression.New(
+                    AnonymousObject.AnonymousObjectCtor,
+                    Expression.NewArrayInit(
+                        typeof(object),
+                        pks.Select(k => Expression.Convert(k, typeof(object)))));
+            }
+
+            private static Expression CreateCorrelationPredicate(INavigation navigation)
+            {
+                var foreignKey = navigation.ForeignKey;
+                var primaryKeyProperties = foreignKey.PrincipalKey.Properties;
+                var foreignKeyProperties = foreignKey.Properties;
+
+                var outerKeyParameter = Expression.Parameter(typeof(AnonymousObject2), "o");
+                var innerKeyParameter = Expression.Parameter(typeof(AnonymousObject2), "i");
+
+                return Expression.Lambda(
+                    primaryKeyProperties
+                        .Select((pk, i) => new { pk, i })
+                        .Zip(
+                            foreignKeyProperties,
+                            (outer, inner) =>
+                            {
+                                //Expression outerKeyAccess =
+                                //    Expression.Convert(
+                                //        Expression.Call(
+                                //            outerKeyParameter,
+                                //            AnonymousObject.GetValueMethodInfo,
+                                //            Expression.Constant(outer.i)),
+                                //        primaryKeyProperties[outer.i].ClrType);
+
+                                var outerKeyAccess =
+                                Expression.Call(
+                                    outerKeyParameter,
+                                    AnonymousObject2.GetValueMethodInfo,
+                                    Expression.Constant(outer.i));
+
+                                var typedOuterKeyAccess =
+                                    Expression.Convert(
+                                        outerKeyAccess,
+                                        primaryKeyProperties[outer.i].ClrType);
+
+                                //Expression innerKeyAccess =
+                                //    Expression.Convert(
+                                //        Expression.Call(
+                                //            innerKeyParameter,
+                                //            AnonymousObject.GetValueMethodInfo,
+                                //            Expression.Constant(outer.i)),
+                                //        foreignKeyProperties[outer.i].ClrType);
+
+                                var innerKeyAccess =
+                                Expression.Call(
+                                    innerKeyParameter,
+                                    AnonymousObject2.GetValueMethodInfo,
+                                    Expression.Constant(outer.i));
+
+                                var typedInnerKeyAccess =
+                                    Expression.Convert(
+                                        innerKeyAccess,
+                                        foreignKeyProperties[outer.i].ClrType);
+
+
+
+
+
+
+
+                                //Expression equalityExpression;
+                                //if (outerKeyAccess.Type != innerKeyAccess.Type)
+                                //{
+                                //    if (outerKeyAccess.Type.IsNullableType())
+                                //    {
+                                //        innerKeyAccess = Expression.Convert(innerKeyAccess, outerKeyAccess.Type);
+                                //    }
+                                //    else
+                                //    {
+                                //        outerKeyAccess = Expression.Convert(outerKeyAccess, innerKeyAccess.Type);
+                                //    }
+                                //}
+
+
+
+
+
+                                Expression equalityExpression;
+                                if (typedOuterKeyAccess.Type != typedInnerKeyAccess.Type)
+                                {
+                                    if (typedOuterKeyAccess.Type.IsNullableType())
+                                    {
+                                        typedInnerKeyAccess = Expression.Convert(typedInnerKeyAccess, typedOuterKeyAccess.Type);
+                                    }
+                                    else
+                                    {
+                                        typedOuterKeyAccess = Expression.Convert(typedOuterKeyAccess, typedInnerKeyAccess.Type);
+                                    }
+                                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                //if (typeof(IStructuralEquatable).GetTypeInfo()
+                                //    .IsAssignableFrom(pkMemberAccess.Type.GetTypeInfo()))
+                                //{
+                                //    equalityExpression
+                                //        = Expression.Call(_structuralEqualsMethod, pkMemberAccess, fkMemberAccess);
+                                //}
+                                //else
+                                {
+                                    //equalityExpression = Expression.Equal(outerKeyAccess, innerKeyAccess);
+                                    equalityExpression = Expression.Equal(typedOuterKeyAccess, typedInnerKeyAccess);
+                                }
+
+                                return inner.ClrType.IsNullableType()
+                                    ? Expression.Condition(
+                                        Expression.OrElse(
+                                            Expression.Equal(innerKeyAccess, Expression.Default(innerKeyAccess.Type)),
+                                            Expression.Equal(outerKeyAccess, Expression.Default(outerKeyAccess.Type)))
+                                            ,
+                                        //Expression.Equal(innerKeyAccess, Expression.Constant(null)),
+                                        Expression.Constant(false),
+                                        equalityExpression)
+                                    : equalityExpression;
+                            })
+                        .Aggregate((e1, e2) => Expression.AndAlso(e1, e2)),
+                    outerKeyParameter,
+                    innerKeyParameter);
+            }
+
+            private static Expression TryCreateCorrelationPredicate(Type targetType, INavigation navigation)
+            {
+                var foreignKey = navigation.ForeignKey;
+                var primaryKeyProperties = foreignKey.PrincipalKey.Properties;
+                var foreignKeyProperties = foreignKey.Properties;
+                var relatedType = navigation.GetTargetType().ClrType;
+
+                if (primaryKeyProperties.Any(p => p.IsShadowProperty)
+                    || foreignKeyProperties.Any(p => p.IsShadowProperty))
+                {
+                    return
+                        Expression.Default(typeof(Func<,,>)
+                            .MakeGenericType(targetType, relatedType, typeof(bool)));
+                }
+
+                var targetEntityParameter = Expression.Parameter(typeof(AnonymousObject) /* targetType*/, "p");
+                var relatedEntityParameter = Expression.Parameter(relatedType, "d");
+
+                return Expression.Lambda(
+                    primaryKeyProperties.Zip(foreignKeyProperties,
+                            (pk, fk) =>
+                            {
+                                Expression pkMemberAccess =
+                                    Expression.Call(
+                                        targetEntityParameter,
+                                        AnonymousObject.GetValueMethodInfo,
+                                        Expression.Constant(0)); // TODO: hack
+
+
+
+
+
+
+                                //Expression pkMemberAccess
+                                //    = Expression.MakeMemberAccess(
+                                //        targetEntityParameter,
+                                //        pk.GetMemberInfo(forConstruction: false, forSet: false));
+
+                                Expression fkMemberAccess
+                                = Expression.MakeMemberAccess(
+                                    relatedEntityParameter,
+                                    fk.GetMemberInfo(forConstruction: false, forSet: false));
+
+                                if (pkMemberAccess.Type != fkMemberAccess.Type)
+                                {
+                                    // PK is always object because it comes from AnonymousObject - we need to type it correctly to avoid reference comparison
+                                    pkMemberAccess = Expression.Convert(pkMemberAccess, fkMemberAccess.Type);
+
+
+                                    //if (pkMemberAccess.Type.IsNullableType())
+                                    //{
+                                    //    fkMemberAccess = Expression.Convert(fkMemberAccess, pkMemberAccess.Type);
+                                    //}
+                                    //else
+                                    //{
+                                    //    pkMemberAccess = Expression.Convert(pkMemberAccess, fkMemberAccess.Type);
+                                    //}
+                                }
+
+                                Expression equalityExpression;
+
+                                //if (typeof(IStructuralEquatable).GetTypeInfo()
+                                //    .IsAssignableFrom(pkMemberAccess.Type.GetTypeInfo()))
+                                //{
+                                //    equalityExpression
+                                //        = Expression.Call(_structuralEqualsMethod, pkMemberAccess, fkMemberAccess);
+                                //}
+                                //else
+                                {
+                                    equalityExpression = Expression.Equal(pkMemberAccess, fkMemberAccess);
+                                }
+
+                                return fk.ClrType.IsNullableType()
+                                    ? Expression.Condition(
+                                        Expression.Equal(fkMemberAccess, Expression.Default(fk.ClrType)),
+                                        Expression.Constant(false),
+                                        equalityExpression)
+                                    : equalityExpression;
+                            })
+                        .Aggregate((e1, e2) => Expression.AndAlso(e1, e2)),
+                    targetEntityParameter,
+                    relatedEntityParameter);
+            }
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     }
 }
