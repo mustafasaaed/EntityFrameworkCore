@@ -1054,6 +1054,30 @@ namespace Microsoft.EntityFrameworkCore.Query
         }
 
         /// <summary>
+        ///     Optimizes correlated collection navigations when possible
+        /// </summary>
+        /// <param name="queryModel"> Query model to run optimizations on. </param>
+        protected override void TryOptimizeCorrelatedCollections(QueryModel queryModel)
+        {
+            var correlatedCollectionOptimizer = new CorrelatedCollectionOptimizingVisitor(QueryCompilationContext, queryModel, !RequiresClientEval);
+            queryModel.SelectClause.Selector = correlatedCollectionOptimizer.Visit(queryModel.SelectClause.Selector);
+
+            if (correlatedCollectionOptimizer.ParentOrderings.Any())
+            {
+                var orderByClause = new OrderByClause();
+
+                foreach (var ordering in correlatedCollectionOptimizer.ParentOrderings)
+                {
+                    orderByClause.Orderings.Add(ordering);
+                }
+
+                queryModel.BodyClauses.Add(orderByClause);
+
+                VisitOrderByClause(orderByClause, queryModel, queryModel.BodyClauses.IndexOf(orderByClause));
+            }
+        }
+
+        /// <summary>
         ///     Visits <see cref="SelectClause" /> nodes.
         /// </summary>
         /// <param name="selectClause"> The node being visited. </param>
