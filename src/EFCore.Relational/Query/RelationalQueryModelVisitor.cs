@@ -58,6 +58,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         private ResultOperatorBase _groupResultOperatorInQueryModel;
 
         private readonly List<GroupJoinClause> _unflattenedGroupJoinClauses = new List<GroupJoinClause>();
+        private readonly List<GroupJoinClause> _flattenedGroupJoinClauses = new List<GroupJoinClause>();
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -1054,6 +1055,35 @@ namespace Microsoft.EntityFrameworkCore.Query
         }
 
         /// <summary>
+        ///     Optimizes correlated collection navigations when possible
+        /// </summary>
+        /// <param name="queryModel"> Query model to run optimizations on. </param>
+        protected override void TryOptimizeCorrelatedCollections(QueryModel queryModel)
+        {
+            var correlatedCollectionOptimizer = new CorrelatedCollectionOptimizingVisitor(
+                QueryCompilationContext, 
+                queryModel, 
+                _flattenedGroupJoinClauses,
+                !RequiresClientEval);
+
+            queryModel.SelectClause.Selector = correlatedCollectionOptimizer.Visit(queryModel.SelectClause.Selector);
+
+            if (correlatedCollectionOptimizer.ParentOrderings.Any())
+            {
+                var orderByClause = new OrderByClause();
+
+                foreach (var ordering in correlatedCollectionOptimizer.ParentOrderings)
+                {
+                    orderByClause.Orderings.Add(ordering);
+                }
+
+                queryModel.BodyClauses.Add(orderByClause);
+
+                VisitOrderByClause(orderByClause, queryModel, queryModel.BodyClauses.IndexOf(orderByClause));
+            }
+        }
+
+        /// <summary>
         ///     Visits <see cref="SelectClause" /> nodes.
         /// </summary>
         /// <param name="selectClause"> The node being visited. </param>
@@ -1173,6 +1203,9 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             var typeIsExpressionTranslatingVisitor = new TypeIsExpressionTranslatingVisitor(QueryCompilationContext.Model);
             queryModel.TransformExpressions(typeIsExpressionTranslatingVisitor.Visit);
+
+            var correlatedCollectionMarker = new CorrelatedCollectionMarkingExpressionVisitor(this);
+            correlatedCollectionMarker.CloneParentQueryModelForCorrelatedSubqueries(queryModel);
         }
 
         /// <summary>
@@ -1710,6 +1743,7 @@ namespace Microsoft.EntityFrameworkCore.Query
             queryModel.BodyClauses.Remove(groupJoinClause);
             queryModel.BodyClauses.Remove(additionalFromClause);
 
+            _flattenedGroupJoinClauses.Add(groupJoinClause);
             _unflattenedGroupJoinClauses.Remove(groupJoinClause);
 
             var querySourceMapping = new QuerySourceMapping();

@@ -41,6 +41,48 @@ namespace Microsoft.EntityFrameworkCore.Query
         private ISet<IQuerySource> _querySourcesRequiringMaterialization;
 
         /// <summary>
+        ///     Structure to store metadata needed for correlated collection optimizations.
+        /// </summary>
+        public class CorrelatedSubqueryMetadata
+        {
+            /// <summary>
+            ///      Id associated with the collection that is being optimized.
+            /// </summary>
+            public int Id { get; set; }
+
+            /// <summary>
+            ///     First navigation in the chain leading to collection navigation that is being optimized.
+            /// </summary>
+            public INavigation FirstNavigation { get; set; }
+
+            /// <summary>
+            ///     Collection navigation that is being optimized.
+            /// </summary>
+            public INavigation CollectionNavigation { get; set; }
+
+            /// <summary>
+            ///     Query source that is origin of the collection navigation.
+            /// </summary>
+            public IQuerySource ParentQuerySource { get; set; }
+
+            /// <summary>
+            ///     Cloned parent QueryModel that will be used to build correlating query.
+            /// </summary>
+            public QueryModel ClonedParentQueryModel { get; set; }
+
+            /// <summary>
+            ///     QuerySourceMapping used during cloning.
+            /// </summary>
+            public QuerySourceMapping QuerySourceMapping { get; set; }
+        }
+
+        /// <summary>
+        ///     A query compilation context. The primary data structure representing the state/components
+        ///     used during query compilation.
+        /// </summary>
+        public Dictionary<QueryModel, CorrelatedSubqueryMetadata> CorrelatedSubqueryMetadataMap = new Dictionary<QueryModel, CorrelatedSubqueryMetadata>();
+
+        /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
@@ -150,6 +192,9 @@ namespace Microsoft.EntityFrameworkCore.Query
             }
         }
 
+        private int added = 0;
+        private int modified = 0;
+
         /// <summary>
         ///     Adds or updates the expression mapped to a query source.
         /// </summary>
@@ -161,12 +206,30 @@ namespace Microsoft.EntityFrameworkCore.Query
             Check.NotNull(querySource, nameof(querySource));
             Check.NotNull(expression, nameof(expression));
 
+
+            if (added == 9)
+            {
+
+            }
+
+
+
+
+
             if (!QuerySourceMapping.ContainsMapping(querySource))
             {
+                //Console.WriteLine("ADDED: " + querySource.ToString() + " |||| " + expression.ToString());
+
+                added++;
+
                 QuerySourceMapping.AddMapping(querySource, expression);
             }
             else
             {
+                //Console.WriteLine("MODIF: " + querySource.ToString() + " |||| " + expression.ToString());
+
+                modified++;
+
                 QuerySourceMapping.ReplaceMapping(querySource, expression);
             }
         }

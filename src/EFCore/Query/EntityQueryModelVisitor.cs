@@ -28,6 +28,7 @@ using Remotion.Linq.Clauses.ExpressionVisitors;
 using Remotion.Linq.Clauses.ResultOperators;
 using Remotion.Linq.Clauses.StreamedData;
 using Remotion.Linq.Parsing;
+using Microsoft.EntityFrameworkCore.Query.Expressions.Internal;
 
 namespace Microsoft.EntityFrameworkCore.Query
 {
@@ -275,16 +276,27 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             // Rewrite includes/navigations
 
-            RewriteProjectedCollectionNavigationsToIncludes(queryModel);
+            //RewriteProjectedCollectionNavigationsToIncludes(queryModel);
+
+            queryModel.TransformExpressions(new SubqueryUniquefyingExpressionVisitor().Visit);
 
             var includeCompiler = new IncludeCompiler(QueryCompilationContext, _querySourceTracingExpressionVisitorFactory);
 
             includeCompiler.CompileIncludes(queryModel, TrackResults(queryModel), asyncQuery);
 
+            queryModel.TransformExpressions(new SubqueryUniquefyingExpressionVisitor().Visit);
             queryModel.TransformExpressions(new CollectionNavigationSubqueryInjector(this).Visit);
             queryModel.TransformExpressions(new CollectionNavigationSetOperatorSubqueryInjector(this).Visit);
 
             var navigationRewritingExpressionVisitor = _navigationRewritingExpressionVisitorFactory.Create(this);
+
+            navigationRewritingExpressionVisitor.InjectSubqueryToCollectionsInProjection(queryModel);
+
+
+            var correlatedCollectionMarker = new CorrelatedCollectionMarkingExpressionVisitor(this);
+            queryModel.SelectClause.TransformExpressions(correlatedCollectionMarker.Visit);
+
+            //navigationRewritingExpressionVisitor.MarkCorrelatedCollections(queryModel);
 
             navigationRewritingExpressionVisitor.Rewrite(queryModel, parentQueryModel: null);
 
@@ -305,6 +317,8 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             _queryOptimizer.Optimize(QueryCompilationContext, queryModel);
 
+            //correlatedCollectionMarker.CloneParentQueryModelForCorrelatedSubqueries(queryModel);
+            
             // Log results
 
             QueryCompilationContext.Logger.QueryModelOptimized(queryModel);
@@ -1011,6 +1025,21 @@ namespace Microsoft.EntityFrameworkCore.Query
         }
 
         /// <summary>
+        ///     Optimizes correlated collection navigations when possible
+        /// </summary>
+        /// <param name="queryModel"> Query model to run optimizations on. </param>
+        protected virtual void TryOptimizeCorrelatedCollections(QueryModel queryModel)
+        {
+            var correlatedCollectionOptimizer = new CorrelatedCollectionOptimizingVisitor(
+                QueryCompilationContext, 
+                queryModel,
+                flattenedGroupJoinClauses: new List<GroupJoinClause>(), 
+                canOptimizeCorrelatedCollections: true);
+
+            queryModel.SelectClause.Selector = correlatedCollectionOptimizer.Visit(queryModel.SelectClause.Selector);
+        }
+
+        /// <summary>
         ///     Visits <see cref="SelectClause" /> nodes.
         /// </summary>
         /// <param name="selectClause"> The node being visited. </param>
@@ -1027,6 +1056,8 @@ namespace Microsoft.EntityFrameworkCore.Query
             {
                 return;
             }
+
+            TryOptimizeCorrelatedCollections(queryModel);
 
             var selector
                 = ReplaceClauseReferences(
@@ -1312,10 +1343,20 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             Check.NotNull(expression, nameof(expression));
 
+            if (expression.ToString() == @"_Include(queryContext, [o1], new [] {}, (queryContext, entity, included) => { ... })")
+            {
+
+            }
+
             expression
                 = _entityQueryableExpressionVisitorFactory
                     .Create(this, querySource)
                     .Visit(expression);
+
+            if (expression.ToString() == @"new AnonymousObject2(new [] {Convert(EF.Property(?[f.Commander.DefeatedBy]?, ""Nickname"")), Convert(EF.Property(?[f.Commander.DefeatedBy]?, ""SquadId"")), Convert(Convert(EF.Property(?[f]?, ""Id"")))})")
+            {
+
+            }
 
             expression
                 = _memberAccessBindingExpressionVisitorFactory
