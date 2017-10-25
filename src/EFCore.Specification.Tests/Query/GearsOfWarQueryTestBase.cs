@@ -3073,6 +3073,26 @@ namespace Microsoft.EntityFrameworkCore.Query
                         .Select(g => g.Rank.ToString()));
         }
 
+        [ConditionalFact]
+        public virtual void BasicProjection()
+        {
+            using (var ctx = CreateContext())
+            {
+                var query = ctx.Gears.Where(g => g.Nickname != "Marcus").Select(g => g.Weapons.Where(w => w.IsAutomatic || w.Name != "foo"));
+                var result = query.ToList();
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void BasicProjectionNested()
+        {
+            using (var ctx = CreateContext())
+            {
+                var query = ctx.Gears.Where(g => g.Nickname != "Marcus").Select(g => g.Squad.Missions.Where(m => m.MissionId != 17));
+                var result = query.ToList();
+            }
+        }
+
         protected GearsOfWarContext CreateContext() => Fixture.CreateContext();
 
         protected virtual void ClearLog()

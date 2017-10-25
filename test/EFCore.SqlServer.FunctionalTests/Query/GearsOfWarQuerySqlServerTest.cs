@@ -4219,6 +4219,22 @@ WHERE [g].[Discriminator] IN (N'Officer', N'Gear')
 ORDER BY [g].[SquadId], [g].[Nickname]");
         }
 
+        public override void BasicProjection()
+        {
+            base.BasicProjection();
+
+            AssertSql(
+                @"");
+        }
+
+        public override void BasicProjectionNested()
+        {
+            base.BasicProjectionNested();
+
+            AssertSql(
+                @"");
+        }
+
         private void AssertSql(params string[] expected)
             => Fixture.TestSqlLoggerFactory.AssertBaseline(expected);
 
