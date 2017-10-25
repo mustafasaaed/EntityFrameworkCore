@@ -1475,6 +1475,15 @@ INNER JOIN (
 ORDER BY [t].[OrderID]");
         }
 
+        public override void GroupJoin_Include_collection_GroupBy_Select(bool useString)
+        {
+            base.GroupJoin_Include_collection_GroupBy_Select(useString);
+
+            AssertSql(
+                @"");
+        }
+
+
         private void AssertSql(params string[] expected)
             => Fixture.TestSqlLoggerFactory.AssertBaseline(expected);
 

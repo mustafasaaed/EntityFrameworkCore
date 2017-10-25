@@ -112,6 +112,12 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions.Internal
         /// <param name="visitor">An instance of <see cref="T:System.Func`2" />.</param>
         protected override Expression VisitChildren(ExpressionVisitor visitor)
         {
+            if (visitor.ToString() == "Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal.MemberAccessBindingExpressionVisitor"
+                && Caller.ToString() == "[f.Commander.DefeatedBy]")
+            {
+
+            }
+
             var newCaller = visitor.Visit(Caller);
             var newAccessOperation = visitor.Visit(AccessOperation);
 

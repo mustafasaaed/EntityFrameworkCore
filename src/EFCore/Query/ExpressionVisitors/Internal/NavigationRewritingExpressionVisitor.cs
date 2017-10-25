@@ -1599,5 +1599,124 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 adjuster(resultOperator, translatedExpression);
             }
         }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public void InjectSubqueryToCollectionsInProjection(QueryModel queryModel)
+        {
+            var visitor = new ProjectionSubqueryInjectingQueryModelVisitor(_queryModelVisitor);
+            visitor.VisitQueryModel(queryModel);
+        }
+
+        private class ProjectionSubqueryInjectingQueryModelVisitor : QueryModelVisitorBase
+        {
+            private readonly CollectionNavigationSubqueryInjector _subqueryInjector;
+
+            public ProjectionSubqueryInjectingQueryModelVisitor(EntityQueryModelVisitor queryModelVisitor)
+            {
+                _subqueryInjector = new CollectionNavigationSubqueryInjector(queryModelVisitor, shouldInject: true);
+            }
+
+            public override void VisitSelectClause(SelectClause selectClause, QueryModel queryModel)
+            {
+                selectClause.Selector = _subqueryInjector.Visit(selectClause.Selector);
+
+                base.VisitSelectClause(selectClause, queryModel);
+            }
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public void MarkCorrelatedCollections(QueryModel queryModel)
+        {
+            var correlatedCollectionMarker = new CorrelatedCollectionMarkingExpressionVisitor(_queryModelVisitor);
+
+            queryModel.SelectClause.TransformExpressions(correlatedCollectionMarker.Visit);
+        }
+
+        private class CorrelatedCollectionMarkingExpressionVisitor : RelinqExpressionVisitor
+        {
+            private EntityQueryModelVisitor _queryModelVisitor;
+
+            public CorrelatedCollectionMarkingExpressionVisitor(EntityQueryModelVisitor queryModelVisitor)
+            {
+                _queryModelVisitor = queryModelVisitor;
+            }
+
+            protected override Expression VisitMethodCall(MethodCallExpression node)
+            {
+                if (node.Method.Name.StartsWith("IncludeCollection"))
+                {
+                    return node;
+                }
+
+                return base.VisitMethodCall(node);
+            }
+
+            protected override Expression VisitSubQuery(SubQueryExpression expression)
+            {
+                var subQueryModel = expression.QueryModel;
+
+                if (subQueryModel.ResultOperators.Count == 0)
+                {
+                    var querySourceReferenceFindingExpressionTreeVisitor
+                        = new QuerySourceReferenceFindingExpressionTreeVisitor();
+
+                    querySourceReferenceFindingExpressionTreeVisitor.Visit(subQueryModel.SelectClause.Selector);
+                    if (querySourceReferenceFindingExpressionTreeVisitor.QuerySourceReferenceExpression?.ReferencedQuerySource == subQueryModel.MainFromClause)
+                    {
+                        var newExpression = _queryModelVisitor.BindNavigationPathPropertyExpression(
+                            subQueryModel.MainFromClause.FromExpression,
+                            (properties, querySource) =>
+                            {
+                                var collectionNavigation = properties.OfType<INavigation>().SingleOrDefault(n => n.IsCollection());
+
+                                if (collectionNavigation != null)
+                                {
+                                    _queryModelVisitor.QueryCompilationContext.CorrelatedSubqueryMetadataMap[subQueryModel] = new QueryCompilationContext.CorrelatedSubqueryMetadata
+                                    {
+                                        FirstNavigation = properties.OfType<INavigation>().First(),
+                                        CollectionNavigation = collectionNavigation,
+                                        ParentQuerySource = querySource
+                                    };
+
+                                    return expression;
+                                }
+
+                                return default;
+                            });
+
+                        if (newExpression != null)
+                        {
+                            return newExpression;
+                        }
+                    }
+                }
+
+                return base.VisitSubQuery(expression);
+            }
+        }
     }
 }

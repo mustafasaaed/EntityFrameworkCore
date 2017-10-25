@@ -546,5 +546,13 @@ END
 FROM [Orders] AS [o]
 WHERE [o].[CustomerID] = N'ALFKI'");
         }
+
+        public override void Projection_when_client_evald_subquery()
+        {
+            base.Projection_when_client_evald_subquery();
+
+            AssertSql(
+                @"");
+        }
     }
 }

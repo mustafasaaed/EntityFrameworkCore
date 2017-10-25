@@ -32,6 +32,9 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         private readonly Dictionary<int, IDisposable> _includedCollections
             = new Dictionary<int, IDisposable>(); // IDisposable as IEnumerable/IAsyncEnumerable
 
+        private readonly Dictionary<int, IDisposable> _childCollections
+            = new Dictionary<int, IDisposable>(); // IDisposable as IEnumerable/IAsyncEnumerable
+
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
@@ -474,6 +477,195 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
             return identityMap;
         }
+
+
+
+
+
+
+
+
+
+
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual IEnumerable<TInner> CorrelateSubquery<TInner>(
+            int childCollectionId,
+            //object originQuerySource,
+            INavigation navigation,
+            //INavigation firstNavigation,
+            AnonymousObject2 outerKey,
+            Func<IEnumerable<Tuple<TInner, AnonymousObject2, AnonymousObject2>>> childCollectionElementFactory,
+            Func<AnonymousObject2, AnonymousObject2, bool> correlationnPredicate)
+        {
+            IDisposable untypedEnumerator = null;
+            IEnumerator<Tuple<TInner, AnonymousObject2, AnonymousObject2>> enumerator = null;
+
+            if (childCollectionId == -1
+                || !_childCollections.TryGetValue(childCollectionId, out untypedEnumerator))
+            {
+                enumerator = childCollectionElementFactory().GetEnumerator();
+
+                if (!enumerator.MoveNext())
+                {
+                    enumerator.Dispose();
+                    enumerator = null;
+                }
+
+                if (childCollectionId != -1)
+                {
+                    _childCollections.Add(childCollectionId, enumerator);
+                }
+            }
+
+            if (enumerator == null)
+            {
+                if (untypedEnumerator == null)
+                {
+                    var clrCollectionAccessor = navigation.GetCollectionAccessor();
+
+                    var sequenceType = clrCollectionAccessor.CollectionType.TryGetSequenceType();
+                    if (sequenceType != typeof(TInner))
+                    {
+                        return new List<TInner>();
+                    }
+
+                    var result = clrCollectionAccessor.Create();
+
+                    return (IEnumerable<TInner>)result;
+                }
+
+                enumerator = (IEnumerator<Tuple<TInner, AnonymousObject2, AnonymousObject2>>)untypedEnumerator;
+            }
+
+            var originKeysMap = new Dictionary<AnonymousObject2, int>();
+
+            var previousOriginKey = default(AnonymousObject2);
+            var firstCollection = true;
+
+            var elementCount = -1;
+
+            var inners = new List<TInner>();
+            while (true)
+            {
+                var shouldInclude = correlationnPredicate(outerKey, enumerator.Current.Item2);
+                if (shouldInclude)
+                {
+                    if (originKeysMap.TryGetValue(outerKey, out var expectedCount)
+                        && expectedCount > elementCount)
+                    {
+                        shouldInclude = false;
+                    }
+
+                    if (!firstCollection
+                        && outerKey != previousOriginKey)
+                    {
+                        shouldInclude = false;
+
+                        originKeysMap[previousOriginKey] = elementCount;
+                    }
+                }
+
+                firstCollection = false;
+                previousOriginKey = outerKey;
+
+
+
+
+                //if (shouldInclude)
+                //{
+                //    if (originKeysMap.TryGetValue(outerKey, out var foobar))
+                //    {
+                //        if (enumerator.Current.Value.Equals(foobar))
+                //        {
+                //            shouldInclude = false;
+                //        }
+
+                //        // compare
+
+                //    }
+                //    else
+                //    {
+                //        originKeysMap[outerKey] = enumerator.Current.Value;
+                //    }
+                //}
+
+
+                //if (firstOriginElementKey == null
+                //    || firstOriginElementKey.Equals(enumerator.Current.Value))
+                //{
+                //    shouldInclude = false;
+                //}
+
+
+                if (shouldInclude)
+                {
+                    inners.Add(enumerator.Current.Item1);
+
+                    // TODO: is tracking needed here?
+
+                    //if (tracking)
+                    //{
+                    //    StartTracking(enumerator.Current, targetEntityType);
+                    //}
+
+                    //if (inverseNavigation != null)
+                    //{
+                    //    Debug.Assert(inverseClrPropertySetter != null);
+
+                    //    inverseClrPropertySetter.SetClrValue(enumerator.Current, entity);
+
+                    //    if (tracking)
+                    //    {
+                    //        var internalEntityEntry = _dependencies.StateManager.TryGetEntry(enumerator.Current);
+
+                    //        Debug.Assert(internalEntityEntry != null);
+
+                    //        internalEntityEntry.SetRelationshipSnapshotValue(inverseNavigation, entity);
+                    //    }
+                    //}
+
+                    elementCount++;
+
+                    if (!enumerator.MoveNext())
+                    {
+                        enumerator.Dispose();
+
+                        if (childCollectionId != -1)
+                        {
+                            _childCollections[childCollectionId] = null;
+                        }
+
+                        //firstCollection = false;
+                        //previousOriginKey = outerKey;
+
+                        break;
+                    }
+                }
+                else
+                {
+                    //originKeysMap[previousOriginKey] = elementCount;
+                    //previousOriginKey = outerKey;
+
+                    //firstCollection = false;
+                    //previousOriginKey = outerKey;
+
+                    break;
+                }
+            }
+
+            return inners;
+        }
+
+
+
+
+
+
+
 
         void IDisposable.Dispose()
         {
