@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Query.Expressions.Internal;
+using Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal;
 using Remotion.Linq;
 using Remotion.Linq.Clauses;
 using Remotion.Linq.Clauses.Expressions;
@@ -595,21 +596,6 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     {
                         fromQueryModel.BodyClauses.Remove(orderByClause);
                     }
-                }
-            }
-
-            private class QuerySourceReferenceFindingExpressionTreeVisitor : RelinqExpressionVisitor
-            {
-                public QuerySourceReferenceExpression QuerySourceReferenceExpression { get; private set; }
-
-                protected override Expression VisitQuerySourceReference(QuerySourceReferenceExpression querySourceReferenceExpression)
-                {
-                    if (QuerySourceReferenceExpression == null)
-                    {
-                        QuerySourceReferenceExpression = querySourceReferenceExpression;
-                    }
-
-                    return querySourceReferenceExpression;
                 }
             }
 

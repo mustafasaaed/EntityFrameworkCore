@@ -32,6 +32,23 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         private readonly Dictionary<int, IDisposable> _includedCollections
             = new Dictionary<int, IDisposable>(); // IDisposable as IEnumerable/IAsyncEnumerable
 
+        private Dictionary<int, CorrelatedCollectionMetadataElement> _correlatedCollectionMetadata
+            = new Dictionary<int, CorrelatedCollectionMetadataElement>();
+
+        private struct CorrelatedCollectionMetadataElement
+        {
+            public CorrelatedCollectionMetadataElement(
+                IDisposable enumerator,
+                MaterializedAnonymousObject previousOriginKey)
+            {
+                Enumerator = enumerator;
+                PreviousOriginKey = previousOriginKey;
+            }
+
+            public IDisposable Enumerator { get; set; }
+            public MaterializedAnonymousObject PreviousOriginKey { get; set; }
+        }
+
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
@@ -473,11 +490,103 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             return identityMap;
         }
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual IEnumerable<TInner> CorrelateSubquery<TInner>(
+            int correlatedCollectionId,
+            INavigation navigation,
+            MaterializedAnonymousObject outerKey,
+            Func<IEnumerable<Tuple<TInner, MaterializedAnonymousObject, MaterializedAnonymousObject>>> correlatedCollectionFactory,
+            Func<MaterializedAnonymousObject, MaterializedAnonymousObject, bool> correlationPredicate)
+        {
+            IDisposable untypedEnumerator = null;
+            IEnumerator<Tuple<TInner, MaterializedAnonymousObject, MaterializedAnonymousObject>> enumerator = null;
+
+            if (!_correlatedCollectionMetadata.TryGetValue(correlatedCollectionId, out var correlatedCollectionMetadataElement))
+            {
+                enumerator = correlatedCollectionFactory().GetEnumerator();
+
+                if (!enumerator.MoveNext())
+                {
+                    enumerator.Dispose();
+                    enumerator = null;
+                }
+
+                correlatedCollectionMetadataElement = new CorrelatedCollectionMetadataElement(enumerator, default);
+                _correlatedCollectionMetadata[correlatedCollectionId] = correlatedCollectionMetadataElement;
+            }
+            else
+            {
+                untypedEnumerator = correlatedCollectionMetadataElement.Enumerator;
+            }
+
+            if (enumerator == null)
+            {
+                if (untypedEnumerator == null)
+                {
+                    yield break;
+                }
+
+                enumerator = (IEnumerator<Tuple<TInner, MaterializedAnonymousObject, MaterializedAnonymousObject>>)untypedEnumerator;
+            }
+
+            while (true)
+            {
+                if (enumerator == null)
+                {
+                    yield break;
+                }
+
+                var shouldCorrelate = correlationPredicate(outerKey, enumerator.Current.Item2);
+                if (shouldCorrelate)
+                {
+                    // if origin key changed, we need to yield break, even if the correlation predicate matches 
+                    // e.g. orders.Select(o => o.Customer.Addresses) - if there are 10 orders but only 5 customers, we still need 10 collections of addresses, even though some of the addresses belong to same customer
+                    if (!correlatedCollectionMetadataElement.PreviousOriginKey.IsDefault()
+                        && !enumerator.Current.Item3.Equals(correlatedCollectionMetadataElement.PreviousOriginKey))
+                    {
+                        correlatedCollectionMetadataElement.PreviousOriginKey = default;
+                        _correlatedCollectionMetadata[correlatedCollectionId] = correlatedCollectionMetadataElement;
+
+                        yield break;
+                    }
+
+                    var result = enumerator.Current.Item1;
+
+                    correlatedCollectionMetadataElement.PreviousOriginKey = enumerator.Current.Item3;
+                    _correlatedCollectionMetadata[correlatedCollectionId] = correlatedCollectionMetadataElement;
+
+                    if (!enumerator.MoveNext())
+                    {
+                        enumerator.Dispose();
+                        enumerator = null;
+                        _correlatedCollectionMetadata[correlatedCollectionId] = default;
+                    }
+
+                    yield return result;
+                }
+                else
+                {
+                    correlatedCollectionMetadataElement.PreviousOriginKey = default;
+                    _correlatedCollectionMetadata[correlatedCollectionId] = correlatedCollectionMetadataElement;
+
+                    yield break;
+                }
+            }
+        }
+
         void IDisposable.Dispose()
         {
             foreach (var kv in _includedCollections)
             {
                 kv.Value?.Dispose();
+            }
+
+            foreach (var kv in _correlatedCollectionMetadata)
+            {
+                kv.Value.Enumerator?.Dispose();
             }
         }
     }

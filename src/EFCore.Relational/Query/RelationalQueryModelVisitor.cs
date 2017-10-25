@@ -1060,6 +1060,28 @@ namespace Microsoft.EntityFrameworkCore.Query
         }
 
         /// <summary>
+        ///     Optimizes correlated collection navigations when possible
+        /// </summary>
+        /// <param name="queryModel"> Query model to run optimizations on. </param>
+        /// <returns> True if the query model was optimized, false otherwise. </returns>
+        protected override bool TryOptimizeCorrelatedCollections(QueryModel queryModel)
+        {
+            var canOptimizeCorrelatedCollections
+                = !RequiresClientEval
+                   && !RequiresClientSelectMany
+                   && !RequiresClientJoin
+                   && !RequiresClientFilter
+                   && !RequiresClientOrderBy;
+
+            if (!canOptimizeCorrelatedCollections)
+            {
+                return false;
+            }
+
+            return base.TryOptimizeCorrelatedCollections(queryModel);
+        }
+
+        /// <summary>
         ///     Visits <see cref="SelectClause" /> nodes.
         /// </summary>
         /// <param name="selectClause"> The node being visited. </param>
@@ -1450,6 +1472,7 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             var projection
                 = QueryCompilationContext.QuerySourceRequiresMaterialization(joinClause)
+                    //|| joinClause.ItemType == typeof(MaterializedAnonymousObject)
                     ? innerSelectExpression.Projection
                     : Enumerable.Empty<Expression>();
 

@@ -230,19 +230,6 @@ namespace Microsoft.EntityFrameworkCore.Query
                     QueryContextParameter);
 
         /// <summary>
-        ///     Rewrites collection navigation projections so that they can be handled by the Include pipeline.
-        /// </summary>
-        /// <param name="queryModel"> The query. </param>
-        protected virtual void RewriteProjectedCollectionNavigationsToIncludes([NotNull] QueryModel queryModel)
-        {
-            Check.NotNull(queryModel, nameof(queryModel));
-
-            var collectionNavigationIncludeRewriter = new CollectionNavigationIncludeExpressionRewriter(this);
-            queryModel.SelectClause.Selector = collectionNavigationIncludeRewriter.Visit(queryModel.SelectClause.Selector);
-            _queryCompilationContext.AddAnnotations(collectionNavigationIncludeRewriter.CollectionNavigationIncludeResultOperators);
-        }
-
-        /// <summary>
         ///     Populates <see cref="Query.QueryCompilationContext.QueryAnnotations" /> based on annotations found in the query.
         /// </summary>
         /// <param name="queryModel"> The query. </param>
@@ -272,19 +259,21 @@ namespace Microsoft.EntityFrameworkCore.Query
             _queryOptimizer.Optimize(QueryCompilationContext, queryModel);
 
             new NondeterministicResultCheckingVisitor(QueryCompilationContext.Logger).VisitQueryModel(queryModel);
+            queryModel.TransformExpressions(new SubqueryUniquefyingExpressionVisitor().Visit);
 
             // Rewrite includes/navigations
 
-            RewriteProjectedCollectionNavigationsToIncludes(queryModel);
-
             var includeCompiler = new IncludeCompiler(QueryCompilationContext, _querySourceTracingExpressionVisitorFactory);
-
             includeCompiler.CompileIncludes(queryModel, TrackResults(queryModel), asyncQuery);
 
             queryModel.TransformExpressions(new CollectionNavigationSubqueryInjector(this).Visit);
             queryModel.TransformExpressions(new CollectionNavigationSetOperatorSubqueryInjector(this).Visit);
 
             var navigationRewritingExpressionVisitor = _navigationRewritingExpressionVisitorFactory.Create(this);
+            navigationRewritingExpressionVisitor.InjectSubqueryToCollectionsInProjection(queryModel);
+
+            var correlatedCollectionFinder = new CorrelatedCollectionFindingExpressionVisitor(this);
+            queryModel.SelectClause.TransformExpressions(correlatedCollectionFinder.Visit);
 
             navigationRewritingExpressionVisitor.Rewrite(queryModel, parentQueryModel: null);
 
@@ -506,7 +495,6 @@ namespace Microsoft.EntityFrameworkCore.Query
                 MethodInfo trackingMethod;
 
                 if (isGrouping)
-
                 {
                     trackingMethod
                         = LinqOperatorProvider.TrackGroupedEntities
@@ -1013,6 +1001,74 @@ namespace Microsoft.EntityFrameworkCore.Query
                     Expression.Constant(ordering.OrderingDirection));
         }
 
+        private bool IsPartOfLeftJoinPattern(AdditionalFromClause additionalFromClause, QueryModel queryModel)
+        {
+            var index = queryModel.BodyClauses.IndexOf(additionalFromClause);
+            var groupJoinClause = queryModel.BodyClauses.ElementAtOrDefault(index - 1) as GroupJoinClause;
+
+            var subQueryModel
+                = (additionalFromClause?.FromExpression as SubQueryExpression)
+                ?.QueryModel;
+
+            var referencedQuerySource
+                = subQueryModel?.MainFromClause.FromExpression.TryGetReferencedQuerySource();
+
+            if (groupJoinClause != null
+                && groupJoinClause == referencedQuerySource
+                && queryModel.CountQuerySourceReferences(groupJoinClause) == 1
+                && subQueryModel.BodyClauses.Count == 0
+                && subQueryModel.ResultOperators.Count == 1
+                && subQueryModel.ResultOperators[0] is DefaultIfEmptyResultOperator)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        ///     Optimizes correlated collection navigations when possible
+        /// </summary>
+        /// <param name="queryModel"> Query model to run optimizations on. </param>
+        /// <returns> True if the query model was optimized, false otherwise. </returns>
+        protected virtual bool TryOptimizeCorrelatedCollections([NotNull] QueryModel queryModel)
+        {
+            //// TODO: disabled for cross joins - problem is outer query containig cross join can produce duplicate results
+            if (queryModel.BodyClauses.OfType<AdditionalFromClause>().Where(c => !IsPartOfLeftJoinPattern(c, queryModel)).Any())
+            {
+                return false;
+            }
+
+            var correlatedCollectionOptimizer = new CorrelatedCollectionOptimizingVisitor(
+                this,
+                queryModel);
+
+            var newSelector = correlatedCollectionOptimizer.Visit(queryModel.SelectClause.Selector);
+            if (newSelector != queryModel.SelectClause.Selector)
+            {
+                // TODO: remove existing (redundant) order bys? - they have already been processed so it doesn't really matter but would make QM "more correct"
+                queryModel.SelectClause.Selector = newSelector;
+
+                if (correlatedCollectionOptimizer.ParentOrderings.Any())
+                {
+                    var orderByClause = new OrderByClause();
+
+                    foreach (var ordering in correlatedCollectionOptimizer.ParentOrderings)
+                    {
+                        orderByClause.Orderings.Add(ordering);
+                    }
+
+                    queryModel.BodyClauses.Add(orderByClause);
+
+                    VisitOrderByClause(orderByClause, queryModel, queryModel.BodyClauses.IndexOf(orderByClause));
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
         /// <summary>
         ///     Visits <see cref="SelectClause" /> nodes.
         /// </summary>
@@ -1029,6 +1085,12 @@ namespace Microsoft.EntityFrameworkCore.Query
                 && selectClause.Selector is QuerySourceReferenceExpression)
             {
                 return;
+            }
+
+            // TODO: for now optimization only works for sync queries
+            if (!QueryCompilationContext.IsAsyncQuery)
+            {
+                TryOptimizeCorrelatedCollections(queryModel);
             }
 
             var selector
