@@ -49,20 +49,17 @@ namespace Microsoft.EntityFrameworkCore.Query
             [NotNull] IRelationalResultOperatorHandler relationalResultOperatorHandler,
             [NotNull] ISqlTranslatingExpressionVisitorFactory sqlTranslatingExpressionVisitorFactory,
             [NotNull] ICompositePredicateExpressionVisitorFactory compositePredicateExpressionVisitorFactory,
-            [NotNull] IConditionalRemovingExpressionVisitorFactory conditionalRemovingExpressionVisitorFactory,
-            [NotNull] IDbContextOptions contextOptions)
+            [NotNull] IConditionalRemovingExpressionVisitorFactory conditionalRemovingExpressionVisitorFactory)
         {
             Check.NotNull(relationalResultOperatorHandler, nameof(relationalResultOperatorHandler));
             Check.NotNull(sqlTranslatingExpressionVisitorFactory, nameof(sqlTranslatingExpressionVisitorFactory));
             Check.NotNull(compositePredicateExpressionVisitorFactory, nameof(compositePredicateExpressionVisitorFactory));
             Check.NotNull(conditionalRemovingExpressionVisitorFactory, nameof(conditionalRemovingExpressionVisitorFactory));
-            Check.NotNull(contextOptions, nameof(contextOptions));
 
             RelationalResultOperatorHandler = relationalResultOperatorHandler;
             SqlTranslatingExpressionVisitorFactory = sqlTranslatingExpressionVisitorFactory;
             CompositePredicateExpressionVisitorFactory = compositePredicateExpressionVisitorFactory;
             ConditionalRemovingExpressionVisitorFactory = conditionalRemovingExpressionVisitorFactory;
-            ContextOptions = contextOptions;
         }
 
         /// <summary>
@@ -86,11 +83,6 @@ namespace Microsoft.EntityFrameworkCore.Query
         public IConditionalRemovingExpressionVisitorFactory ConditionalRemovingExpressionVisitorFactory { get; }
 
         /// <summary>
-        ///     Gets options for controlling the context.
-        /// </summary>
-        public IDbContextOptions ContextOptions { get; }
-
-        /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
         /// </summary>
         /// <param name="relationalResultOperatorHandler"> A replacement for the current dependency of this type. </param>
@@ -100,8 +92,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                 relationalResultOperatorHandler,
                 SqlTranslatingExpressionVisitorFactory,
                 CompositePredicateExpressionVisitorFactory,
-                ConditionalRemovingExpressionVisitorFactory,
-                ContextOptions);
+                ConditionalRemovingExpressionVisitorFactory);
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
@@ -113,8 +104,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                 RelationalResultOperatorHandler,
                 sqlTranslatingExpressionVisitorFactory,
                 CompositePredicateExpressionVisitorFactory,
-                ConditionalRemovingExpressionVisitorFactory,
-                ContextOptions);
+                ConditionalRemovingExpressionVisitorFactory);
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
@@ -126,8 +116,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                 RelationalResultOperatorHandler,
                 SqlTranslatingExpressionVisitorFactory,
                 compositePredicateExpressionVisitorFactory,
-                ConditionalRemovingExpressionVisitorFactory,
-                ContextOptions);
+                ConditionalRemovingExpressionVisitorFactory);
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
@@ -139,8 +128,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                 RelationalResultOperatorHandler,
                 SqlTranslatingExpressionVisitorFactory,
                 CompositePredicateExpressionVisitorFactory,
-                conditionalRemovingExpressionVisitorFactory,
-                ContextOptions);
+                conditionalRemovingExpressionVisitorFactory);
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
@@ -152,7 +140,6 @@ namespace Microsoft.EntityFrameworkCore.Query
                 RelationalResultOperatorHandler,
                 SqlTranslatingExpressionVisitorFactory,
                 CompositePredicateExpressionVisitorFactory,
-                ConditionalRemovingExpressionVisitorFactory,
-                contextOptions);
+                ConditionalRemovingExpressionVisitorFactory);
     }
 }

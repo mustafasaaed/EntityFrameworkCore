@@ -77,17 +77,17 @@ namespace Microsoft.EntityFrameworkCore.Query
             _compositePredicateExpressionVisitorFactory = relationalDependencies.CompositePredicateExpressionVisitorFactory;
             _conditionalRemovingExpressionVisitorFactory = relationalDependencies.ConditionalRemovingExpressionVisitorFactory;
 
-            ContextOptions = relationalDependencies.ContextOptions;
+            //ContextOptions = relationalDependencies.ContextOptions;
             ParentQueryModelVisitor = parentQueryModelVisitor;
         }
 
-        /// <summary>
-        ///     Gets the options for the target context.
-        /// </summary>
-        /// <value>
-        ///     Options for the target context.
-        /// </value>
-        protected virtual IDbContextOptions ContextOptions { get; }
+        ///// <summary>
+        /////     Gets the options for the target context.
+        ///// </summary>
+        ///// <value>
+        /////     Options for the target context.
+        ///// </value>
+        //protected virtual IDbContextOptions ContextOptions { get; }
 
         /// <summary>
         ///     Gets or sets a value indicating whether the query requires client eval.
@@ -1059,6 +1059,28 @@ namespace Microsoft.EntityFrameworkCore.Query
         }
 
         /// <summary>
+        ///     Optimizes correlated collection navigations when possible
+        /// </summary>
+        /// <param name="queryModel"> Query model to run optimizations on. </param>
+        /// <returns> True if the query model was optimized, false otherwise. </returns>
+        protected override bool TryOptimizeCorrelatedCollections(QueryModel queryModel)
+        {
+            var canOptimizeCorrelatedCollections
+                = !RequiresClientEval
+                   && !RequiresClientSelectMany
+                   && !RequiresClientJoin
+                   && !RequiresClientFilter
+                   && !RequiresClientOrderBy;
+
+            if (!canOptimizeCorrelatedCollections)
+            {
+                return false;
+            }
+
+            return base.TryOptimizeCorrelatedCollections(queryModel);
+        }
+
+        /// <summary>
         ///     Visits <see cref="SelectClause" /> nodes.
         /// </summary>
         /// <param name="selectClause"> The node being visited. </param>
@@ -1449,6 +1471,7 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             var projection
                 = QueryCompilationContext.QuerySourceRequiresMaterialization(joinClause)
+                    //|| joinClause.ItemType == typeof(MaterializedAnonymousObject)
                     ? innerSelectExpression.Projection
                     : Enumerable.Empty<Expression>();
 

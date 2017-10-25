@@ -9,6 +9,7 @@ using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Utilities;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -39,6 +40,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         private long? _serviceProviderHash;
         private string _logFragment;
         private WarningsConfiguration _warningsConfiguration = new WarningsConfiguration();
+        private bool _legacyCorrelatedSubqueries;
 
         /// <summary>
         ///     Creates a new set of options with everything set to default values.
@@ -232,6 +234,21 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         }
 
         /// <summary>
+        ///     Creates a new instance with all options the same as for this instance, but with the given option changed.
+        ///     It is unusual to call this method directly. Instead use <see cref="DbContextOptionsBuilder" />.
+        /// </summary>
+        /// <param name="legacyCorrelatedSubqueries"> The option to change. </param>
+        /// <returns> A new instance with the option changed. </returns>
+        public virtual CoreOptionsExtension WithLegacyCorrelatedSubqueries(bool legacyCorrelatedSubqueries = false)
+        {
+            var clone = Clone();
+
+            clone._legacyCorrelatedSubqueries = legacyCorrelatedSubqueries;
+
+            return clone;
+        }
+
+        /// <summary>
         ///     The option set from the <see cref="DbContextOptionsBuilder.EnableSensitiveDataLogging" /> method.
         /// </summary>
         public virtual bool IsSensitiveDataLoggingEnabled => _sensitiveDataLoggingEnabled;
@@ -283,6 +300,11 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         ///     method.
         /// </summary>
         public virtual int? MaxPoolSize => _maxPoolSize;
+
+        /// <summary>
+        ///     The option set from the <see cref="DbContextOptionsBuilder.UseLegacyCorrelatedSubqueries(bool)" /> method.
+        /// </summary>
+        public virtual bool UseLegacyCorrelatedSubqueries => _legacyCorrelatedSubqueries;
 
         /// <summary>
         ///     Adds the services required to make the selected options work. This is used when there

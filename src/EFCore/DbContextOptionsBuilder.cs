@@ -244,6 +244,27 @@ namespace Microsoft.EntityFrameworkCore
 
         /// <summary>
         ///     <para>
+        ///         Configures the context to use legacy translation for queries containing correlated subqueries.
+        ///     </para>
+        ///     <para>
+        ///         Example of such query is projecting a collection navigation that is composed on:
+        ///         customers.Select(c => c.Orders.Where(o => o.Id > 5).Select(o => new { o.Name, o.Price }) 
+        ///     </para>
+        ///     <para>
+        ///         Legacy translation produces N + 1 queries - one query to fetch all the customers
+        ///         and one query for each customer to fetch it's relevant orders.
+        ///     </para>
+        ///     <para>
+        ///         New translation produces two queries - one to fetch all the customers  and one to fetch all orders for all the customers
+        ///         Results of those two queries are then correlated on the client.
+        ///     </para>
+        /// </summary>
+        /// <returns> The same builder instance so that multiple calls can be chained. </returns>
+        public virtual DbContextOptionsBuilder UseLegacyCorrelatedSubqueries(bool legacyCorrelatedSubqueries = false)
+            => WithOption(e => e.WithLegacyCorrelatedSubqueries(legacyCorrelatedSubqueries));
+
+        /// <summary>
+        ///     <para>
         ///         Replaces the internal Entity Framework implementation of a service contract with a different
         ///         implementation.
         ///     </para>

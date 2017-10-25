@@ -61,7 +61,22 @@ namespace Microsoft.EntityFrameworkCore.Query
             LinqOperatorProvider = linqOperatorProvider;
             ContextType = dependencies.CurrentContext.Context.GetType();
             TrackQueryResults = trackQueryResults;
+
+            IsAsyncQuery = LinqOperatorProvider.Select.ReturnType.GetGenericTypeDefinition() == typeof(IAsyncEnumerable<>);
         }
+
+        /// <summary>
+        ///     Mapping between correlated collection query modles and metadata needed to process them
+        /// </summary>
+        public virtual Dictionary<QueryModel, CorrelatedSubqueryMetadata> CorrelatedSubqueryMetadataMap { get; } = new Dictionary<QueryModel, CorrelatedSubqueryMetadata>();
+
+        /// <summary>
+        ///     Value indicating whether the current query is asynchronous.
+        /// </summary>
+        /// <value>
+        ///     True is query is asynchronous, false otherwise.
+        ///</value>
+        public virtual bool IsAsyncQuery { get; }
 
         /// <summary>
         ///     Gets the model.

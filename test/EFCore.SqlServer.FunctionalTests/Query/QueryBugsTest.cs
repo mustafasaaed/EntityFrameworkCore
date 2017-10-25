@@ -3426,6 +3426,99 @@ FROM [Comments] AS [c]");
 
         #endregion
 
+        #region Bug9282
+
+        [Fact]
+        public virtual void Correlated_collections_use_legacy_translation()
+        {
+            using (var testStore = CreateDatabase9282())
+            {
+                var options = Fixture.CreateOptions(testStore);
+                options = new DbContextOptionsBuilder(options).UseLegacyCorrelatedSubqueries(true).Options;
+
+                using (var context = new MyContext9282(options))
+                {
+                    var query = context.Blogs.OrderBy(b => b.Name).Select(b => b.Posts.Select(p => new { p.Id, p.Name }).ToList());
+                    var result = query.ToList();
+
+                    AssertSql(
+                        @"SELECT [b].[Id]
+FROM [Blogs] AS [b]
+ORDER BY [b].[Name]",
+                        //
+                        @"@_outer_Id='1'
+
+SELECT [p].[Id], [p].[Name]
+FROM [Posts] AS [p]
+WHERE @_outer_Id = [p].[BlogId]",
+                        //
+                        @"@_outer_Id='2'
+
+SELECT [p].[Id], [p].[Name]
+FROM [Posts] AS [p]
+WHERE @_outer_Id = [p].[BlogId]");
+                }
+            }
+        }
+
+        private SqlServerTestStore CreateDatabase9282()
+        {
+            return CreateTestStore(
+                () => new MyContext9282(_options),
+                context =>
+                {
+                    context.AddRange(
+                        new Blog9282 { Id = 1, Name = "B1" },
+                        new Blog9282 { Id = 2, Name = "B2" },
+                        new Post9282 { Id = 1, Name = "P11", BlogId = 1 },
+                        new Post9282 { Id = 2, Name = "P12", BlogId = 1 },
+                        new Post9282 { Id = 3, Name = "P21", BlogId = 2 },
+                        new Post9282 { Id = 4, Name = "P22", BlogId = 2 },
+                        new Post9282 { Id = 5, Name = "P23", BlogId = 2 }
+                    );
+
+                    context.SaveChanges();
+
+                    ClearLog();
+                });
+        }
+
+        public class MyContext9282 : DbContext
+        {
+            public MyContext9282(DbContextOptions options)
+                : base(options)
+            {
+            }
+
+            public DbSet<Blog9282> Blogs { get; set; }
+            public DbSet<Post9282> Posts { get; set; }
+
+            protected override void OnModelCreating(ModelBuilder modelBuilder)
+            {
+                modelBuilder.Entity<Blog9282>().Property(e => e.Id).ValueGeneratedNever();
+                modelBuilder.Entity<Post9282>().Property(e => e.Id).ValueGeneratedNever();
+            }
+        }
+
+        public class Blog9282
+        {
+            public int Id { get; set; }
+            public string Name { get; set; }
+
+            public ICollection<Post9282> Posts { get; set; }
+        }
+
+        public class Post9282
+        {
+            public int Id { get; set; }
+            public string Name { get; set; }
+            public int BlogId { get; set; }
+
+            public Blog9282 Blog { get; set; }
+        }
+
+        #endregion
+
         private DbContextOptions _options;
 
         private SqlServerTestStore CreateTestStore<TContext>(
