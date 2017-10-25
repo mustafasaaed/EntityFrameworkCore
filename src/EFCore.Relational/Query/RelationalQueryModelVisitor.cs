@@ -58,6 +58,8 @@ namespace Microsoft.EntityFrameworkCore.Query
         private ResultOperatorBase _groupResultOperatorInQueryModel;
 
         private readonly List<GroupJoinClause> _unflattenedGroupJoinClauses = new List<GroupJoinClause>();
+        private readonly Dictionary<JoinClause, Tuple<GroupJoinClause, AdditionalFromClause>> _flattenedGroupJoinClausesMapping
+            = new Dictionary<JoinClause, Tuple<GroupJoinClause, AdditionalFromClause>>();
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -1054,6 +1056,56 @@ namespace Microsoft.EntityFrameworkCore.Query
         }
 
         /// <summary>
+        ///     Optimizes correlated collection navigations when possible
+        /// </summary>
+        /// <param name="queryModel"> Query model to run optimizations on. </param>
+        /// <param name="trackResults"> Value indicating whether results of the query should be tracked. </param>
+        /// <returns> True if the query model was optimized, false otherwise. </returns>
+        protected override bool TryOptimizeCorrelatedCollections(QueryModel queryModel, bool trackResults)
+        {
+            var canOptimizeCorrelatedCollections
+                = !RequiresClientEval
+                   && !RequiresClientSelectMany
+                   && !RequiresClientJoin
+                   && !RequiresClientFilter
+                   && !RequiresClientOrderBy;
+
+            if (canOptimizeCorrelatedCollections)
+            {
+                var correlatedCollectionOptimizer = new CorrelatedCollectionOptimizingVisitor(
+                    QueryCompilationContext,
+                    _flattenedGroupJoinClausesMapping,
+                    queryModel);
+
+                var newSelector = correlatedCollectionOptimizer.Visit(queryModel.SelectClause.Selector);
+                if (newSelector != queryModel.SelectClause.Selector)
+                {
+                    // TODO: remove existing order bys? - they have already been processed so it doesn't really matter but would make QM more correct
+
+                    queryModel.SelectClause.Selector = newSelector;
+
+                    if (correlatedCollectionOptimizer.ParentOrderings.Any())
+                    {
+                        var orderByClause = new OrderByClause();
+
+                        foreach (var ordering in correlatedCollectionOptimizer.ParentOrderings)
+                        {
+                            orderByClause.Orderings.Add(ordering);
+                        }
+
+                        queryModel.BodyClauses.Add(orderByClause);
+
+                        VisitOrderByClause(orderByClause, queryModel, queryModel.BodyClauses.IndexOf(orderByClause));
+                    }
+
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
         ///     Visits <see cref="SelectClause" /> nodes.
         /// </summary>
         /// <param name="selectClause"> The node being visited. </param>
@@ -1443,7 +1495,7 @@ namespace Microsoft.EntityFrameworkCore.Query
             outerSelectExpression.RemoveRangeFromProjection(previousProjectionCount);
 
             var projection
-                = QueryCompilationContext.QuerySourceRequiresMaterialization(joinClause)
+                = QueryCompilationContext.QuerySourceRequiresMaterialization(joinClause) || joinClause.ItemType == typeof(AnonymousObject2) // MLG haxxx
                     ? innerSelectExpression.Projection
                     : Enumerable.Empty<Expression>();
 
@@ -1711,6 +1763,7 @@ namespace Microsoft.EntityFrameworkCore.Query
             queryModel.BodyClauses.Remove(additionalFromClause);
 
             _unflattenedGroupJoinClauses.Remove(groupJoinClause);
+            _flattenedGroupJoinClausesMapping[joinClause] = new Tuple<GroupJoinClause, AdditionalFromClause>(groupJoinClause, additionalFromClause);
 
             var querySourceMapping = new QuerySourceMapping();
 
