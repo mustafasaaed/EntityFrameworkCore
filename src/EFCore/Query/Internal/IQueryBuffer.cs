@@ -83,5 +83,27 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             [NotNull] Func<IAsyncEnumerable<TRelated>> valuesFactory,
             [CanBeNull] Func<TEntity, TRelated, bool> joinPredicate,
             CancellationToken cancellationToken);
+
+
+
+
+
+
+
+
+
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        IEnumerable<TInner> CorrelateSubquery<TInner>(
+            int childCollectionId,
+            object originQuerySource,
+            INavigation navigation,
+            INavigation firstNavigation,
+            AnonymousObject2 outerKey,
+            Func<IEnumerable<KeyValuePair<KeyValuePair<TInner, AnonymousObject2>, AnonymousObject2>>> childCollectionElementFactory,
+            Func<AnonymousObject2, AnonymousObject2, bool> correlationnPredicate);
     }
 }

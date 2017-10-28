@@ -41,6 +41,33 @@ namespace Microsoft.EntityFrameworkCore.Query
         private ISet<IQuerySource> _querySourcesRequiringMaterialization;
 
         /// <summary>
+        ///     Structure to store metadata needed for correlated collection optimizations.
+        /// </summary>
+        public struct CorrelatedSubqueryMetadata
+        {
+            /// <summary>
+            ///     First navigation in the chain leading to collection navigation that is being optimized.
+            /// </summary>
+            public INavigation FirstNavigation { get; set; }
+
+            /// <summary>
+            ///     Collection navigation that is being optimized.
+            /// </summary>
+            public INavigation CollectionNavigation { get; set; }
+
+            /// <summary>
+            ///     Query source that is origin of the collection navigation.
+            /// </summary>
+            public IQuerySource ParentQuerySource { get; set; }
+        }
+
+        /// <summary>
+        ///     A query compilation context. The primary data structure representing the state/components
+        ///     used during query compilation.
+        /// </summary>
+        public Dictionary<QueryModel, CorrelatedSubqueryMetadata> CorrelatedSubqueryMetadataMap = new Dictionary<QueryModel, CorrelatedSubqueryMetadata>();
+
+        /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>

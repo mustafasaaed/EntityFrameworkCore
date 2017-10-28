@@ -28,6 +28,7 @@ using Remotion.Linq.Clauses.ExpressionVisitors;
 using Remotion.Linq.Clauses.ResultOperators;
 using Remotion.Linq.Clauses.StreamedData;
 using Remotion.Linq.Parsing;
+using Microsoft.EntityFrameworkCore.Query.Expressions.Internal;
 
 namespace Microsoft.EntityFrameworkCore.Query
 {
@@ -1014,6 +1015,16 @@ namespace Microsoft.EntityFrameworkCore.Query
         }
 
         /// <summary>
+        ///     Optimizes correlated collection navigations when possible
+        /// </summary>
+        /// <param name="queryModel"> Query model to run optimizations on. </param>
+        protected virtual void TryOptimizeCorrelatedCollections(QueryModel queryModel)
+        {
+            var correlatedCollectionOptimizer = new CorrelatedCollectionOptimizingVisitor(QueryCompilationContext, queryModel, canOptimizeCorrelatedCollections: true);
+            queryModel.SelectClause.Selector = correlatedCollectionOptimizer.Visit(queryModel.SelectClause.Selector);
+        }
+
+        /// <summary>
         ///     Visits <see cref="SelectClause" /> nodes.
         /// </summary>
         /// <param name="selectClause"> The node being visited. </param>
@@ -1030,6 +1041,8 @@ namespace Microsoft.EntityFrameworkCore.Query
             {
                 return;
             }
+
+            TryOptimizeCorrelatedCollections(queryModel);
 
             var selector
                 = ReplaceClauseReferences(

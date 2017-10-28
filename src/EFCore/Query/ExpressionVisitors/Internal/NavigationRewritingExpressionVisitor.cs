@@ -661,37 +661,37 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 
 
 
-        /// <summary>
-        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
-        /// </summary>
-        protected override Expression VisitExtension(Expression node)
-        {
-            if (node is CorrelatedCollectionMarkingExpression correlatedCollectionMarkingExpression)
-            {
-                //var oldInsideCorrelatedCollection = _insideCorrelatedCollection;
-                //_insideCorrelatedCollection = true;
+        ///// <summary>
+        /////     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        /////     directly from your code. This API may change or be removed in future releases.
+        ///// </summary>
+        //protected override Expression VisitExtension(Expression node)
+        //{
+        //    if (node is CorrelatedCollectionMarkingExpression correlatedCollectionMarkingExpression)
+        //    {
+        //        //var oldInsideCorrelatedCollection = _insideCorrelatedCollection;
+        //        //_insideCorrelatedCollection = true;
 
-                //try
-                //{
-                    var newOperand = (SubQueryExpression)Visit(correlatedCollectionMarkingExpression.Operand);
+        //        //try
+        //        //{
+        //            var newOperand = (SubQueryExpression)Visit(correlatedCollectionMarkingExpression.Operand);
 
-                    return newOperand != correlatedCollectionMarkingExpression.Operand
-                        ? new CorrelatedCollectionMarkingExpression(
-                            newOperand,
-                            correlatedCollectionMarkingExpression.OriginQuerySource,
-                            correlatedCollectionMarkingExpression.FirstNavigation,
-                            correlatedCollectionMarkingExpression.LastNavigation)
-                        : correlatedCollectionMarkingExpression;
-                //}
-                //finally
-                //{
-                //    _insideCorrelatedCollection = oldInsideCorrelatedCollection;
-                //}
-            }
+        //            return newOperand != correlatedCollectionMarkingExpression.Operand
+        //                ? new CorrelatedCollectionMarkingExpression(
+        //                    newOperand,
+        //                    correlatedCollectionMarkingExpression.ParentQuerySource,
+        //                    correlatedCollectionMarkingExpression.FirstNavigation,
+        //                    correlatedCollectionMarkingExpression.LastNavigation)
+        //                : correlatedCollectionMarkingExpression;
+        //        //}
+        //        //finally
+        //        //{
+        //        //    _insideCorrelatedCollection = oldInsideCorrelatedCollection;
+        //        //}
+        //    }
 
-            return base.VisitExtension(node);
-        }
+        //    return base.VisitExtension(node);
+        //}
 
 
 
@@ -1712,31 +1712,6 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public struct CorrelatedSubqueryMetadata
-        {
-            /// <summary>
-            ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
-            ///     directly from your code. This API may change or be removed in future releases.
-            /// </summary>
-            public INavigation FirstNavigation { get; set; }
-
-            /// <summary>
-            ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
-            ///     directly from your code. This API may change or be removed in future releases.
-            /// </summary>
-            public INavigation CollectionNavigation { get; set; }
-
-            /// <summary>
-            ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
-            ///     directly from your code. This API may change or be removed in future releases.
-            /// </summary>
-            public IQuerySource OriginQuerySource { get; set; }
-        }
-
-        /// <summary>
-        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
-        /// </summary>
         public void MarkCorrelatedCollections(QueryModel queryModel)
         {
             var correlatedCollectionMarker = new CorrelatedCollectionMarkingExpressionVisitor(_queryModelVisitor);
@@ -1782,26 +1757,38 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             protected override Expression VisitSubQuery(SubQueryExpression expression)
             {
                 var subQueryModel = expression.QueryModel;
-                if (subQueryModel.ResultOperators.Count == 0
-                    && subQueryModel.SelectClause.Selector is QuerySourceReferenceExpression selectorQsre
-                    && selectorQsre.ReferencedQuerySource == subQueryModel.MainFromClause)
-                {
-                    var newExpression = _queryModelVisitor.BindNavigationPathPropertyExpression(
-                        subQueryModel.MainFromClause.FromExpression,
-                        (properties, querySource) =>
-                        {
-                            var collectionNavigation = properties.OfType<INavigation>().SingleOrDefault(n => n.IsCollection());
+                //if (subQueryModel.ResultOperators.Count == 0
+                //    && subQueryModel.SelectClause.Selector is QuerySourceReferenceExpression selectorQsre
+                //    && selectorQsre.ReferencedQuerySource == subQueryModel.MainFromClause)
+                //{
+                //    var newExpression = _queryModelVisitor.BindNavigationPathPropertyExpression(
+                //        subQueryModel.MainFromClause.FromExpression,
+                //        (properties, querySource) =>
+                //        {
+                //            var collectionNavigation = properties.OfType<INavigation>().SingleOrDefault(n => n.IsCollection());
 
-                            return collectionNavigation != null
-                                ? new CorrelatedCollectionMarkingExpression(expression, querySource, properties.OfType<INavigation>().First(), collectionNavigation)
-                                : default;
-                        });
+                //            if (collectionNavigation != null)
+                //            {
+                //                _queryModelVisitor.QueryCompilationContext.CorrelatedSubqueryMetadataMap[subQueryModel] = new QueryCompilationContext.CorrelatedSubqueryMetadata
+                //                {
+                //                    FirstNavigation = properties.OfType<INavigation>().First(),
+                //                    CollectionNavigation = collectionNavigation,
+                //                    ParentQuerySource = querySource
+                //                };
+                //            }
 
-                    if (newExpression != null)
-                    {
-                        return newExpression;
-                    }
-                }
+
+
+                //            return collectionNavigation != null
+                //                ? new CorrelatedCollectionMarkingExpression(expression, querySource, properties.OfType<INavigation>().First(), collectionNavigation)
+                //                : default;
+                //        });
+
+                //    if (newExpression != null)
+                //    {
+                //        return newExpression;
+                //    }
+                //}
 
                 if (subQueryModel.ResultOperators.Count == 0)
                 {
@@ -1817,9 +1804,23 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                             {
                                 var collectionNavigation = properties.OfType<INavigation>().SingleOrDefault(n => n.IsCollection());
 
-                                return collectionNavigation != null
-                                    ? new CorrelatedCollectionMarkingExpression(expression, querySource, properties.OfType<INavigation>().First(), collectionNavigation)
-                                    : default;
+                                if (collectionNavigation != null)
+                                {
+                                    _queryModelVisitor.QueryCompilationContext.CorrelatedSubqueryMetadataMap[subQueryModel] = new QueryCompilationContext.CorrelatedSubqueryMetadata
+                                    {
+                                        FirstNavigation = properties.OfType<INavigation>().First(),
+                                        CollectionNavigation = collectionNavigation,
+                                        ParentQuerySource = querySource
+                                    };
+
+                                    return expression;
+                                }
+
+                                return default;
+
+                                //return collectionNavigation != null
+                                //    ? new CorrelatedCollectionMarkingExpression(expression, querySource, properties.OfType<INavigation>().First(), collectionNavigation)
+                                //    : default;
                             });
 
                         if (newExpression != null)
