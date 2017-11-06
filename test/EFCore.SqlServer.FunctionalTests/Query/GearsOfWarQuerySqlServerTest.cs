@@ -4238,6 +4238,14 @@ ORDER BY [g].[SquadId], [g].[Nickname]");
                 @"");
         }
 
+        public override void ProjectionAnonymous()
+        {
+            base.ProjectionAnonymous();
+
+            AssertSql(
+                @"");
+        }
+
         private void AssertSql(params string[] expected)
             => Fixture.TestSqlLoggerFactory.AssertBaseline(expected);
 

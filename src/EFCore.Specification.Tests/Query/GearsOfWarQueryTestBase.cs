@@ -3104,6 +3104,16 @@ namespace Microsoft.EntityFrameworkCore.Query
             }
         }
 
+        [ConditionalFact]
+        public virtual void ProjectionAnonymous()
+        {
+            using (var ctx = CreateContext())
+            {
+                var query = ctx.Squads.Where(s => s.Id < 20).Select(s => new { s.Name, Collection = s.Members.Where(m => m.HasSoulPatch).Select(m => new { m.FullName, m.Rank }) });
+                var result = query.ToList();
+            }
+        }
+
         protected GearsOfWarContext CreateContext() => Fixture.CreateContext();
 
         protected virtual void ClearLog()
