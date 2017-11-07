@@ -99,11 +99,20 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         /// </summary>
         IEnumerable<TInner> CorrelateSubquery<TInner>(
             int childCollectionId,
-            //object originQuerySource,
             INavigation navigation,
-            //INavigation firstNavigation,
             AnonymousObject2 outerKey,
             Func<IEnumerable<Tuple<TInner, AnonymousObject2, AnonymousObject2>>> childCollectionElementFactory,
             Func<AnonymousObject2, AnonymousObject2, bool> correlationnPredicate);
+
+        ///// <summary>
+        /////     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        /////     directly from your code. This API may change or be removed in future releases.
+        ///// </summary>
+        //IEnumerable<TInner> CorrelateSubqueryStreaming<TInner>(
+        //    IEnumerable<Tuple<TInner, AnonymousObject2, AnonymousObject2>> source,
+        //    int childCollectionId,
+        //    INavigation navigation,
+        //    AnonymousObject2 outerKey,
+        //    Func<AnonymousObject2, AnonymousObject2, bool> correlationnPredicate);
     }
 }

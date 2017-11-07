@@ -317,16 +317,5 @@ namespace Microsoft.EntityFrameworkCore.Query
                 yield return element;
             }
         }
-
-
-
-
-
-
-
-
-        //private static IEnumerable<TResult> _CorrelateCollectionNavigation<TResult>()
-        //{
-        //}
     }
 }
