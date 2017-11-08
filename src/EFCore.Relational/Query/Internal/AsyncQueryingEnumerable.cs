@@ -47,6 +47,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             private readonly RelationalQueryContext _relationalQueryContext;
             private readonly ShaperCommandContext _shaperCommandContext;
             private readonly IShaper<T> _shaper;
+            private int _index;
 
             private RelationalDataReader _dataReader;
             private Queue<ValueBuffer> _buffer;
@@ -61,6 +62,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 _valueBufferFactory = _shaperCommandContext.ValueBufferFactory;
                 _relationalQueryContext = queryingEnumerable._relationalQueryContext;
                 _shaper = queryingEnumerable._shaper;
+                _index = 0;
             }
 
             public async Task<bool> MoveNext(CancellationToken cancellationToken)
@@ -81,7 +83,8 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
                     if (_buffer.Count > 0)
                     {
-                        Current = _shaper.Shape(_relationalQueryContext, _buffer.Dequeue());
+                        Current = _shaper.Shape(_relationalQueryContext, _buffer.Dequeue(), _index);
+                        _index++;
 
                         return true;
                     }
@@ -133,8 +136,10 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
                 Current
                     = hasNext
-                        ? _shaper.Shape(_relationalQueryContext, _valueBufferFactory.Create(_dbDataReader))
+                        ? _shaper.Shape(_relationalQueryContext, _valueBufferFactory.Create(_dbDataReader), _index)
                         : default;
+
+                _index++;
 
                 if (buffer)
                 {

@@ -49,6 +49,12 @@ namespace Microsoft.EntityFrameworkCore.Query
         public static readonly ParameterExpression QueryContextParameter
             = Expression.Parameter(typeof(QueryContext), "queryContext");
 
+        /// <summary>
+        ///     Expression to reference the index of a current element in the selector
+        /// </summary>
+        public static readonly ParameterExpression SelectorIndexParameter
+            = Expression.Parameter(typeof(int), "index");
+
         private readonly IQueryOptimizer _queryOptimizer;
         private readonly INavigationRewritingExpressionVisitorFactory _navigationRewritingExpressionVisitorFactory;
         private readonly IQuerySourceTracingExpressionVisitorFactory _querySourceTracingExpressionVisitorFactory;
@@ -1033,6 +1039,7 @@ namespace Microsoft.EntityFrameworkCore.Query
             var correlatedCollectionOptimizer = new CorrelatedCollectionOptimizingVisitor(
                 QueryCompilationContext, 
                 queryModel,
+                SelectorIndexParameter,
                 canOptimizeCorrelatedCollections: true);
 
             queryModel.SelectClause.Selector = correlatedCollectionOptimizer.Visit(queryModel.SelectClause.Selector);
@@ -1087,7 +1094,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                             LinqOperatorProvider.Select
                                 .MakeGenericMethod(CurrentParameter.Type, selector.Type),
                             _expression,
-                            Expression.Lambda(selector, CurrentParameter))
+                            Expression.Lambda(selector, CurrentParameter, SelectorIndexParameter))
                         : Expression.Call(
                             _selectAsync
                                 .MakeGenericMethod(CurrentParameter.Type, selector.Type),
@@ -1095,6 +1102,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                             Expression.Lambda(
                                 asyncSelector,
                                 CurrentParameter,
+                                SelectorIndexParameter,
                                 taskLiftingExpressionVisitor.CancellationTokenParameter
                                 ?? Expression.Parameter(typeof(CancellationToken), name: "ct")));
             }
@@ -1108,17 +1116,17 @@ namespace Microsoft.EntityFrameworkCore.Query
         // ReSharper disable once InconsistentNaming
         private static IAsyncEnumerable<TResult> _SelectAsync<TSource, TResult>(
             IAsyncEnumerable<TSource> source,
-            Func<TSource, CancellationToken, Task<TResult>> selector)
+            Func<TSource, int, CancellationToken, Task<TResult>> selector)
             => new AsyncSelectEnumerable<TSource, TResult>(source, selector);
 
         private class AsyncSelectEnumerable<TSource, TResult> : IAsyncEnumerable<TResult>
         {
             private readonly IAsyncEnumerable<TSource> _source;
-            private readonly Func<TSource, CancellationToken, Task<TResult>> _selector;
+            private readonly Func<TSource, int, CancellationToken, Task<TResult>> _selector;
 
             public AsyncSelectEnumerable(
                 IAsyncEnumerable<TSource> source,
-                Func<TSource, CancellationToken, Task<TResult>> selector)
+                Func<TSource, int, CancellationToken, Task<TResult>> selector)
             {
                 _source = source;
                 _selector = selector;
@@ -1129,12 +1137,14 @@ namespace Microsoft.EntityFrameworkCore.Query
             private class AsyncSelectEnumerator : IAsyncEnumerator<TResult>
             {
                 private readonly IAsyncEnumerator<TSource> _enumerator;
-                private readonly Func<TSource, CancellationToken, Task<TResult>> _selector;
+                private readonly Func<TSource, int, CancellationToken, Task<TResult>> _selector;
+                private int _index;
 
                 public AsyncSelectEnumerator(AsyncSelectEnumerable<TSource, TResult> enumerable)
                 {
                     _enumerator = enumerable._source.GetEnumerator();
                     _selector = enumerable._selector;
+                    _index = 0;
                 }
 
                 public async Task<bool> MoveNext(CancellationToken cancellationToken)
@@ -1144,7 +1154,8 @@ namespace Microsoft.EntityFrameworkCore.Query
                         return false;
                     }
 
-                    Current = await _selector(_enumerator.Current, cancellationToken);
+                    Current = await _selector(_enumerator.Current, _index, cancellationToken);
+                    _index++;
 
                     return true;
                 }

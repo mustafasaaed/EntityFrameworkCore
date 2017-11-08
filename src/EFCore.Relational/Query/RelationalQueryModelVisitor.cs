@@ -1062,6 +1062,7 @@ namespace Microsoft.EntityFrameworkCore.Query
             var correlatedCollectionOptimizer = new CorrelatedCollectionOptimizingVisitor(
                 QueryCompilationContext, 
                 queryModel, 
+                SelectorIndexParameter,
                 !RequiresClientEval);
 
             queryModel.SelectClause.Selector = correlatedCollectionOptimizer.Visit(queryModel.SelectClause.Selector);

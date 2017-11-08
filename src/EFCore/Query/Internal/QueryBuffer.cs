@@ -662,21 +662,9 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         //}
 
 
+        private Tuple<object, AnonymousObject2> _previousElement = null;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        private Dictionary<int, int> _lastProcessedOuterMap = new Dictionary<int, int>();
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -684,6 +672,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         /// </summary>
         public virtual IEnumerable<TInner> CorrelateSubquery<TInner>(
             int childCollectionId,
+            int outerElementIndex,
             INavigation navigation,
             AnonymousObject2 outerKey,
             Func<IEnumerable<Tuple<TInner, AnonymousObject2, AnonymousObject2>>> childCollectionElementFactory,
@@ -692,8 +681,16 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             IDisposable untypedEnumerator = null;
             IEnumerator<Tuple<TInner, AnonymousObject2, AnonymousObject2>> enumerator = null;
 
+            if (!_lastProcessedOuterMap.TryGetValue(childCollectionId, out var lastProcessedOuter))
+            {
+                lastProcessedOuter = -1;
+            }
+
+            _lastProcessedOuterMap[childCollectionId] = outerElementIndex;
+
             if (childCollectionId == -1
-                || !_childCollections.TryGetValue(childCollectionId, out untypedEnumerator))
+                || !_childCollections.TryGetValue(childCollectionId, out untypedEnumerator)
+                || lastProcessedOuter >= outerElementIndex)
             {
                 enumerator = childCollectionElementFactory().GetEnumerator();
 
@@ -705,7 +702,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
                 if (childCollectionId != -1)
                 {
-                    _childCollections.Add(childCollectionId, enumerator);
+                    _childCollections[childCollectionId] = enumerator;
                 }
             }
 
@@ -727,9 +724,6 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
                     //return (IEnumerable<TInner>)result;
                 }
-
-
-
 
                 enumerator = (IEnumerator<Tuple<TInner, AnonymousObject2, AnonymousObject2>>)untypedEnumerator;
             }
@@ -759,10 +753,14 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
                 if (shouldCorrelate)
                 {
+                    _previousElement = null;
+
                     yield return result;
                 }
                 else
                 {
+                    _previousElement = new Tuple<object, AnonymousObject2>(result, enumerator.Current.Item2);
+
                     break;
                 }
             }

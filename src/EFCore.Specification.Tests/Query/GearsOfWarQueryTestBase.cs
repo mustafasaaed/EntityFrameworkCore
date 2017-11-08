@@ -3107,9 +3107,21 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void ProjectionAnonymous()
         {
+
+            //var foo = Enumerable.Range(10, 20).Select((a, i) => new { a, i });
+
+
+
+            //foreach (var f in foo)
+            //{
+            //    Console.WriteLine(f);
+            //}
+
+
+
             using (var ctx = CreateContext())
             {
-                var query = ctx.Squads.Where(s => s.Id < 20).Select(s => new { s.Name, Collection = s.Members.Where(m => m.HasSoulPatch).Select(m => new { m.FullName, m.Rank }) });
+                var query = ctx.Squads.Where(s => s.Id < 20).Select(s => new { s.Name, Collection = s.Members./*Where(m => !m.HasSoulPatch).*/Select(m => new { m.FullName, m.Rank }) });
                 var result = query.ToList();
 
 

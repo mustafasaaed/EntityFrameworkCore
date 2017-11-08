@@ -190,7 +190,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
             return _Select(
                 results,
-                result =>
+                (result, index) =>
                     {
                         if (result != null)
                         {
@@ -241,7 +241,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         {
             return _Select(
                 groupings,
-                g => new TrackingGrouping<TKey, TElement>(
+                (g, index) => new TrackingGrouping<TKey, TElement>(
                     g,
                     queryContext,
                     entityTrackingInfos,
@@ -502,7 +502,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         /// </summary>
         // ReSharper disable once InconsistentNaming
         private static IAsyncEnumerable<TResult> _Select<TSource, TResult>(
-            [NotNull] IAsyncEnumerable<TSource> source, [NotNull] Func<TSource, TResult> selector)
+            [NotNull] IAsyncEnumerable<TSource> source, [NotNull] Func<TSource, int, TResult> selector)
             => source.Select(selector);
 
         /// <summary>

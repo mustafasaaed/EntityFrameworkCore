@@ -1060,6 +1060,12 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
         {
             Check.NotNull(expression, nameof(expression));
 
+            // don't translate select index parameters
+            if (expression == EntityQueryModelVisitor.SelectorIndexParameter)
+            {
+                return null;
+            }
+
             var underlyingType = expression.Type.UnwrapNullableType().UnwrapEnumType();
 
             return _relationalTypeMapper.FindMapping(underlyingType) != null

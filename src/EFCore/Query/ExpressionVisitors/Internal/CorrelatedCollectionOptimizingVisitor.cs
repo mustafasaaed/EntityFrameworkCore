@@ -29,6 +29,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         private readonly QueryCompilationContext _queryCompilationContext;
         private readonly bool _canOptimizeCorrelatedCollections;
         private readonly QueryModel _parentQueryModel;
+        private readonly ParameterExpression _selectIndexParameter;
 
         private static readonly ExpressionEqualityComparer _expressionEqualityComparer
             = new ExpressionEqualityComparer();
@@ -40,10 +41,12 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         public CorrelatedCollectionOptimizingVisitor(
             QueryCompilationContext queryCompilationContext, 
             QueryModel parentQueryModel,
+            ParameterExpression selectIndexParameter,
             bool canOptimizeCorrelatedCollections)
         {
             _queryCompilationContext = queryCompilationContext;
             _parentQueryModel = parentQueryModel;
+            _selectIndexParameter = selectIndexParameter;
             _canOptimizeCorrelatedCollections = canOptimizeCorrelatedCollections;
         }
 
@@ -64,7 +67,6 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 var parentQsre = new QuerySourceReferenceExpression(correlatedSubqueryMetadata.ParentQuerySource);
 
                 var result = Rewrite2(subQueryExpression.QueryModel, correlatedSubqueryMetadata.CollectionNavigation, parentQsre);
-
 
                 return result;
             }
@@ -517,6 +519,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             var arguments = new List<Expression>
                     {
                         Expression.Constant(_correlatedCollectionCount++),
+                        _selectIndexParameter,
                         Expression.Constant(navigation),
                         outerKey,
                         Expression.Lambda(new SubQueryExpression(collectionQueryModel)),

@@ -99,6 +99,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         /// </summary>
         IEnumerable<TInner> CorrelateSubquery<TInner>(
             int childCollectionId,
+            int outerElementIndex,
             INavigation navigation,
             AnonymousObject2 outerKey,
             Func<IEnumerable<Tuple<TInner, AnonymousObject2, AnonymousObject2>>> childCollectionElementFactory,
