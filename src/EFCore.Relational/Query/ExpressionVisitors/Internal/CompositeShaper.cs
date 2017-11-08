@@ -131,10 +131,10 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 _materializer = materializer;
             }
 
-            public TResult Shape(QueryContext queryContext, ValueBuffer valueBuffer, int index)
+            public TResult Shape(QueryContext queryContext, ValueBuffer valueBuffer)
                 => _materializer(
-                    _outerShaper.Shape(queryContext, valueBuffer, index),
-                    _innerShaper.Shape(queryContext, valueBuffer, index));
+                    _outerShaper.Shape(queryContext, valueBuffer),
+                    _innerShaper.Shape(queryContext, valueBuffer));
 
             public override Type Type => typeof(TResult);
 

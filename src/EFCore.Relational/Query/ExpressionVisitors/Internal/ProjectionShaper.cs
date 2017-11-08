@@ -59,7 +59,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         [UsedImplicitly]
         private static TypedProjectionShaper<TShaper, TIn, TOut> CreateShaperMethod<TShaper, TIn, TOut>(
             TShaper shaper,
-            Func<QueryContext, TIn, int, TOut> selector)
+            Func<QueryContext, TIn, TOut> selector)
             where TShaper : Shaper, IShaper<TIn>
             => new TypedProjectionShaper<TShaper, TIn, TOut>(shaper, selector);
 
@@ -67,11 +67,11 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             where TShaper : Shaper, IShaper<TIn>
         {
             private readonly TShaper _shaper;
-            private readonly Func<QueryContext, TIn, int, TOut> _selector;
+            private readonly Func<QueryContext, TIn, TOut> _selector;
 
             public TypedProjectionShaper(
                 TShaper shaper,
-                Func<QueryContext, TIn, int, TOut> selector)
+                Func<QueryContext, TIn, TOut> selector)
                 : base(shaper.QuerySource)
             {
                 _shaper = shaper;
@@ -94,8 +94,8 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 
             public override Type Type => typeof(TOut);
 
-            public TOut Shape(QueryContext queryContext, ValueBuffer valueBuffer, int index)
-                => _selector(queryContext, _shaper.Shape(queryContext, valueBuffer.WithOffset(ValueBufferOffset), index), index);
+            public TOut Shape(QueryContext queryContext, ValueBuffer valueBuffer)
+                => _selector(queryContext, _shaper.Shape(queryContext, valueBuffer.WithOffset(ValueBufferOffset)));
 
             public override Shaper WithOffset(int offset)
                 => new TypedProjectionShaper<TShaper, TIn, TOut>(

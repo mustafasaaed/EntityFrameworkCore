@@ -83,7 +83,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
                     if (_buffer.Count > 0)
                     {
-                        Current = _shaper.Shape(_relationalQueryContext, _buffer.Dequeue(), _index);
+                        Current = _shaper.Shape(_relationalQueryContext, _buffer.Dequeue());
                         _index++;
 
                         return true;
@@ -136,7 +136,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
                 Current
                     = hasNext
-                        ? _shaper.Shape(_relationalQueryContext, _valueBufferFactory.Create(_dbDataReader), _index)
+                        ? _shaper.Shape(_relationalQueryContext, _valueBufferFactory.Create(_dbDataReader))
                         : default;
 
                 _index++;

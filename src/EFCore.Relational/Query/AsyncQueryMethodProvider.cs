@@ -57,7 +57,7 @@ namespace Microsoft.EntityFrameworkCore.Query
             IShaper<T> shaper)
             => new DefaultIfEmptyAsyncEnumerable(
                     _Query((RelationalQueryContext)queryContext, shaperCommandContext))
-                .Select(vb => shaper.Shape(queryContext, vb, 12345));
+                .Select(vb => shaper.Shape(queryContext, vb));
 
         private sealed class DefaultIfEmptyAsyncEnumerable : IAsyncEnumerable<ValueBuffer>
         {
@@ -348,14 +348,14 @@ namespace Microsoft.EntityFrameworkCore.Query
                             = Equals(_nextOuter, default(TOuter))
 #pragma warning restore IDE0034 // Simplify 'default' expression
                                 ? _groupJoinAsyncEnumerable._outerShaper
-                                    .Shape(_groupJoinAsyncEnumerable._queryContext, _sourceEnumerator.Current, 12345)
+                                    .Shape(_groupJoinAsyncEnumerable._queryContext, _sourceEnumerator.Current)
                                 : _nextOuter;
 
                         _nextOuter = default;
 
                         var inner
                             = _groupJoinAsyncEnumerable._innerShaper
-                                .Shape(_groupJoinAsyncEnumerable._queryContext, _sourceEnumerator.Current, 12345);
+                                .Shape(_groupJoinAsyncEnumerable._queryContext, _sourceEnumerator.Current);
 
                         var inners = new List<TInner>();
 
@@ -387,7 +387,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                             {
                                 _nextOuter
                                     = _groupJoinAsyncEnumerable._outerShaper
-                                        .Shape(_groupJoinAsyncEnumerable._queryContext, _sourceEnumerator.Current, 12345);
+                                        .Shape(_groupJoinAsyncEnumerable._queryContext, _sourceEnumerator.Current);
 
                                 if (!Equals(outer, _nextOuter))
                                 {
@@ -399,7 +399,7 @@ namespace Microsoft.EntityFrameworkCore.Query
 
                             inner
                                 = _groupJoinAsyncEnumerable._innerShaper
-                                    .Shape(_groupJoinAsyncEnumerable._queryContext, _sourceEnumerator.Current, 12345);
+                                    .Shape(_groupJoinAsyncEnumerable._queryContext, _sourceEnumerator.Current);
 
                             if (inner == null)
                             {
