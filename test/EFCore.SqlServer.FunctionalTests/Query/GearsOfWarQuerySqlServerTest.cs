@@ -4246,6 +4246,14 @@ ORDER BY [g].[SquadId], [g].[Nickname]");
                 @"");
         }
 
+        public override void Correlated_collection_random_access_on_outer()
+        {
+            base.Correlated_collection_random_access_on_outer();
+
+            AssertSql(
+                @"");
+        }
+
         private void AssertSql(params string[] expected)
             => Fixture.TestSqlLoggerFactory.AssertBaseline(expected);
 

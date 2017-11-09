@@ -190,7 +190,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
             return _Select(
                 results,
-                (result, index) =>
+                result =>
                     {
                         if (result != null)
                         {
@@ -241,7 +241,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         {
             return _Select(
                 groupings,
-                (g, index) => new TrackingGrouping<TKey, TElement>(
+                g => new TrackingGrouping<TKey, TElement>(
                     g,
                     queryContext,
                     entityTrackingInfos,
@@ -502,6 +502,25 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         /// </summary>
         // ReSharper disable once InconsistentNaming
         private static IAsyncEnumerable<TResult> _Select<TSource, TResult>(
+            [NotNull] IAsyncEnumerable<TSource> source, [NotNull] Func<TSource, TResult> selector)
+            => source.Select(selector);
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual MethodInfo SelectIndex => _selectIndex;
+
+        private static readonly MethodInfo _selectIndex
+            = typeof(AsyncLinqOperatorProvider)
+                .GetTypeInfo().GetDeclaredMethod(nameof(_SelectIndex));
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        // ReSharper disable once InconsistentNaming
+        private static IAsyncEnumerable<TResult> _SelectIndex<TSource, TResult>(
             [NotNull] IAsyncEnumerable<TSource> source, [NotNull] Func<TSource, int, TResult> selector)
             => source.Select(selector);
 

@@ -32,8 +32,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 = Expression.Lambda(
                     materializer.Body,
                     EntityQueryModelVisitor.QueryContextParameter,
-                    materializer.Parameters[0],
-                    EntityQueryModelVisitor.SelectorIndexParameter);
+                    materializer.Parameters[0]);
 
             var shaper
                 = (Shaper)_createShaperMethodInfo

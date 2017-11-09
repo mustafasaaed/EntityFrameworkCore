@@ -3127,9 +3127,46 @@ namespace Microsoft.EntityFrameworkCore.Query
 
                 foreach (var r in result)
                 {
+
+                    var enumerator1 = r.Collection.GetEnumerator();
+
+                    enumerator1.MoveNext();
+                    enumerator1.MoveNext();
+
                     var foo1 = r.Collection.ToList();
                     var foo2 = r.Collection.ToList();
                 }
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collection_random_access_on_outer()
+        {
+            using (var ctx = CreateContext())
+            {
+                var query = ctx.Cities.OrderBy(c => c.Name).Where(c  => c.Name != "Foo").Select(c => new { c.Name, Collection = c.BornGears.Select(g => new { g.FullName, g.Rank, g.CityOfBirth.Name }) });
+                var result = query.ToList();
+
+                // jump forward
+                var gears1 = result[1].Collection.ToList();
+
+                // same value again
+                var gears12 = result[1].Collection.ToList();
+
+                // jump back
+                var gears0 = result[0].Collection.ToList();
+
+                // sequential
+                var gears13 = result[1].Collection.ToList();
+
+                // read till the end
+                var gears2 = result[2].Collection.ToList();
+
+                // jump forward after reading till the end
+                var gears22 = result[2].Collection.ToList();
+
+                // start from beginning after reading till the end
+                var gears02 = result[0].Collection.ToList();
             }
         }
 

@@ -175,6 +175,9 @@ namespace Microsoft.EntityFrameworkCore.Query
                 QueryCompilationContext.FindQuerySourcesRequiringMaterialization(this, queryModel);
                 QueryCompilationContext.DetermineQueryBufferRequirement(queryModel);
 
+                // TODO: hack
+                _isAsyncQuery = false;
+
                 VisitQueryModel(queryModel);
 
                 SingleResultToSequence(queryModel);
@@ -210,6 +213,9 @@ namespace Microsoft.EntityFrameworkCore.Query
 
                 QueryCompilationContext.FindQuerySourcesRequiringMaterialization(this, queryModel);
                 QueryCompilationContext.DetermineQueryBufferRequirement(queryModel);
+
+                // TODO: hack
+                _isAsyncQuery = false;
 
                 VisitQueryModel(queryModel);
 
@@ -1034,7 +1040,8 @@ namespace Microsoft.EntityFrameworkCore.Query
         ///     Optimizes correlated collection navigations when possible
         /// </summary>
         /// <param name="queryModel"> Query model to run optimizations on. </param>
-        protected virtual void TryOptimizeCorrelatedCollections(QueryModel queryModel)
+        /// <returns> True if the query model was optimized, false otherwise. </returns>
+        protected virtual bool TryOptimizeCorrelatedCollections(QueryModel queryModel)
         {
             var correlatedCollectionOptimizer = new CorrelatedCollectionOptimizingVisitor(
                 QueryCompilationContext, 
@@ -1042,8 +1049,21 @@ namespace Microsoft.EntityFrameworkCore.Query
                 SelectorIndexParameter,
                 canOptimizeCorrelatedCollections: true);
 
-            queryModel.SelectClause.Selector = correlatedCollectionOptimizer.Visit(queryModel.SelectClause.Selector);
+            var newSelector = correlatedCollectionOptimizer.Visit(queryModel.SelectClause.Selector);
+            if (newSelector != queryModel.SelectClause.Selector)
+            {
+                queryModel.SelectClause.Selector = newSelector;
+
+                return true;
+            }
+            else
+            {
+                return false;
+            }
         }
+
+
+        private bool _isAsyncQuery = false;
 
         /// <summary>
         ///     Visits <see cref="SelectClause" /> nodes.
@@ -1063,7 +1083,12 @@ namespace Microsoft.EntityFrameworkCore.Query
                 return;
             }
 
-            TryOptimizeCorrelatedCollections(queryModel);
+            var optimizedCorrelatedCollections = false;
+
+            if (!_isAsyncQuery)
+            {
+                optimizedCorrelatedCollections = TryOptimizeCorrelatedCollections(queryModel);
+            }
 
             var selector
                 = ReplaceClauseReferences(
@@ -1088,23 +1113,34 @@ namespace Microsoft.EntityFrameworkCore.Query
                     asyncSelector = taskLiftingExpressionVisitor.LiftTasks(selector);
                 }
 
-                _expression
-                    = asyncSelector == selector
-                        ? Expression.Call(
-                            LinqOperatorProvider.Select
+                if (optimizedCorrelatedCollections)
+                {
+                    _expression
+                        = Expression.Call(
+                            LinqOperatorProvider.SelectIndex
                                 .MakeGenericMethod(CurrentParameter.Type, selector.Type),
                             _expression,
-                            Expression.Lambda(selector, CurrentParameter, SelectorIndexParameter))
-                        : Expression.Call(
-                            _selectAsync
-                                .MakeGenericMethod(CurrentParameter.Type, selector.Type),
-                            _expression,
-                            Expression.Lambda(
-                                asyncSelector,
-                                CurrentParameter,
-                                SelectorIndexParameter,
-                                taskLiftingExpressionVisitor.CancellationTokenParameter
-                                ?? Expression.Parameter(typeof(CancellationToken), name: "ct")));
+                            Expression.Lambda(selector, CurrentParameter, SelectorIndexParameter));
+                }
+                else
+                {
+                    _expression
+                        = asyncSelector == selector
+                            ? Expression.Call(
+                                LinqOperatorProvider.Select
+                                    .MakeGenericMethod(CurrentParameter.Type, selector.Type),
+                                _expression,
+                                Expression.Lambda(selector, CurrentParameter))
+                            : Expression.Call(
+                                _selectAsync
+                                    .MakeGenericMethod(CurrentParameter.Type, selector.Type),
+                                _expression,
+                                Expression.Lambda(
+                                    asyncSelector,
+                                    CurrentParameter,
+                                    taskLiftingExpressionVisitor.CancellationTokenParameter
+                                    ?? Expression.Parameter(typeof(CancellationToken), name: "ct")));
+                }
             }
         }
 

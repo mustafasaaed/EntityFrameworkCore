@@ -1057,7 +1057,8 @@ namespace Microsoft.EntityFrameworkCore.Query
         ///     Optimizes correlated collection navigations when possible
         /// </summary>
         /// <param name="queryModel"> Query model to run optimizations on. </param>
-        protected override void TryOptimizeCorrelatedCollections(QueryModel queryModel)
+        /// <returns> True if the query model was optimized, false otherwise. </returns>
+        protected override bool TryOptimizeCorrelatedCollections(QueryModel queryModel)
         {
             var correlatedCollectionOptimizer = new CorrelatedCollectionOptimizingVisitor(
                 QueryCompilationContext, 
@@ -1065,20 +1066,30 @@ namespace Microsoft.EntityFrameworkCore.Query
                 SelectorIndexParameter,
                 !RequiresClientEval);
 
-            queryModel.SelectClause.Selector = correlatedCollectionOptimizer.Visit(queryModel.SelectClause.Selector);
-
-            if (correlatedCollectionOptimizer.ParentOrderings.Any())
+            var newSelector = correlatedCollectionOptimizer.Visit(queryModel.SelectClause.Selector);
+            if (newSelector != queryModel.SelectClause.Selector)
             {
-                var orderByClause = new OrderByClause();
+                queryModel.SelectClause.Selector = newSelector;
 
-                foreach (var ordering in correlatedCollectionOptimizer.ParentOrderings)
+                if (correlatedCollectionOptimizer.ParentOrderings.Any())
                 {
-                    orderByClause.Orderings.Add(ordering);
+                    var orderByClause = new OrderByClause();
+
+                    foreach (var ordering in correlatedCollectionOptimizer.ParentOrderings)
+                    {
+                        orderByClause.Orderings.Add(ordering);
+                    }
+
+                    queryModel.BodyClauses.Add(orderByClause);
+
+                    VisitOrderByClause(orderByClause, queryModel, queryModel.BodyClauses.IndexOf(orderByClause));
                 }
 
-                queryModel.BodyClauses.Add(orderByClause);
-
-                VisitOrderByClause(orderByClause, queryModel, queryModel.BodyClauses.IndexOf(orderByClause));
+                return true;
+            }
+            else
+            {
+                return false;
             }
         }
 
