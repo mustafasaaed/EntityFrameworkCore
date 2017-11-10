@@ -668,16 +668,18 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
         private struct ChildCollectionMetadataElement
         {
-            public ChildCollectionMetadataElement(IDisposable enumerator, int lastOuterElementIndex, int maxInnerElementIndex)
+            public ChildCollectionMetadataElement(IDisposable enumerator, int lastOuterElementIndex, int maxInnerElementIndex, Tuple<object, AnonymousObject2> previous)
             {
                 Enumerator = enumerator;
                 LastOuterElementIndex = lastOuterElementIndex;
                 MaxInnerElementIndex = maxInnerElementIndex;
+                Previous = previous;
             }
 
             public IDisposable Enumerator { get; set; }
             public int LastOuterElementIndex { get; set; }
             public int MaxInnerElementIndex { get; set; }
+            public Tuple<object, AnonymousObject2> Previous { get; set; }
         }
 
         private Dictionary<int, ChildCollectionMetadataElement> _childCollectionMetadata = new Dictionary<int, ChildCollectionMetadataElement>();
@@ -697,22 +699,14 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             IDisposable untypedEnumerator = null;
             ChildCollectionMetadataElement childCollectionMetadataElement;
             IEnumerator<Tuple<TInner, AnonymousObject2, AnonymousObject2>> enumerator = null;
+            //Tuple<object, AnonymousObject2> previous;
 
             if (!_childCollectionMetadata.TryGetValue(childCollectionId, out childCollectionMetadataElement))
             {
                 enumerator = childCollectionElementFactory().GetEnumerator();
 
-                //if (!enumerator.MoveNext())
-                //{
-                //    enumerator.Dispose();
-                //    enumerator = null;
-                //}
-
-                //if (childCollectionId != -1)
-                {
-                    childCollectionMetadataElement = new ChildCollectionMetadataElement(enumerator, -1, -1);
-                    _childCollectionMetadata[childCollectionId] = childCollectionMetadataElement;
-                }
+                childCollectionMetadataElement = new ChildCollectionMetadataElement(enumerator, -1, -1, default);
+                _childCollectionMetadata[childCollectionId] = childCollectionMetadataElement;
             }
             else
             {
@@ -738,23 +732,23 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 enumerator.Dispose();
                 enumerator = childCollectionElementFactory().GetEnumerator();
                 childCollectionMetadataElement.Enumerator = enumerator;
+                childCollectionMetadataElement.Previous = default;
             }
 
             childCollectionMetadataElement.LastOuterElementIndex = outerElementIndex;
             _childCollectionMetadata[childCollectionId] = childCollectionMetadataElement;
-
-            Tuple<TInner, AnonymousObject2> previous = default;
-
+            //previous = childCollectionMetadataElement.Previous;
+            
             var foundMatchingElement = false;
+            //TInner result = default;
             while (true)
             {
                 bool shouldCorrelate = false;
-                TInner result = default;
 
-                if (previous != null)
+                if (childCollectionMetadataElement.Previous != null)
                 {
-                    shouldCorrelate = correlationnPredicate(outerKey, previous.Item2);
-                    result = previous.Item1;
+                    shouldCorrelate = correlationnPredicate(outerKey, childCollectionMetadataElement.Previous.Item2);
+                    //result = (TInner)childCollectionMetadataElement.Previous.Item1;
                 }
                 else
                 {
@@ -767,25 +761,31 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     }
 
                     shouldCorrelate = correlationnPredicate(outerKey, enumerator.Current.Item2);
-                    result = enumerator.Current.Item1;
+                    //result = enumerator.Current.Item1;
                 }
 
                 foundMatchingElement |= shouldCorrelate;
+                childCollectionMetadataElement.Previous = default;
 
                 if (shouldCorrelate)
                 {
-                    previous = null;
+                    _childCollectionMetadata[childCollectionId] = childCollectionMetadataElement;
 
                     yield return enumerator.Current.Item1;
                 }
-                else if (outerElementAccessDirection == 1 || foundMatchingElement)
+                else
                 {
-                    // if inner element doesnt match and we are in sequential access mode, this means that all inners for a given outer have been iterated over and we can break;
-                    // in case of non-sequential access, we can only stop iterating if we have found a match earlier - otherwise we need to keep looking, until we find a match or reach end of the stream
-                    break;
+                    // if the current element is not correlated with the parent, store it for the next comparison
+                    if (outerElementAccessDirection == 1 || foundMatchingElement)
+                    {
+                        childCollectionMetadataElement.Previous = new Tuple<object, AnonymousObject2>(enumerator.Current.Item1, enumerator.Current.Item2);
+                        _childCollectionMetadata[childCollectionId] = childCollectionMetadataElement;
+
+                        // if inner element doesnt match and we are in sequential access mode, this means that all inners for a given outer have been iterated over and we can break;
+                        // in case of non-sequential access, we can only stop iterating if we have found a match earlier - otherwise we need to keep looking, until we find a match or reach end of the stream
+                        break;
+                    }
                 }
-
-
 
                 //else
                 //{

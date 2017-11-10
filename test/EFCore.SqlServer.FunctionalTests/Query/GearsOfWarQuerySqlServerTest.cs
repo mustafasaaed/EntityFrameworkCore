@@ -4222,6 +4222,15 @@ ORDER BY [g].[SquadId], [g].[Nickname]");
                 @"");
         }
 
+        public override void BasicInclude()
+        {
+            base.BasicInclude();
+
+            AssertSql(
+                @"");
+
+        }
+
         public override void BasicProjectionComposite()
         {
             base.BasicProjectionComposite();
@@ -4246,12 +4255,98 @@ ORDER BY [g].[SquadId], [g].[Nickname]");
                 @"");
         }
 
+
+        public override void Correlated_collection_nested()
+        {
+            base.Correlated_collection_nested();
+
+            AssertSql(
+                @"");
+        }
+
+        public override void Correlated_collection_nested2()
+        {
+            base.Correlated_collection_nested2();
+
+            AssertSql(
+                @"");
+        }
+
+        public override void Correlated_collection_nested_includes()
+        {
+            base.Correlated_collection_nested_includes();
+
+            AssertSql(
+                @"");
+        }
+
+        public override void Correlated_collection_single()
+        {
+            base.Correlated_collection_single();
+
+            AssertSql(
+                @"");
+        }
+
         public override void Correlated_collection_random_access_on_outer()
         {
             base.Correlated_collection_random_access_on_outer();
 
             AssertSql(
-                @"");
+                @"SELECT [c].[Name]
+FROM [Cities] AS [c]
+WHERE [c].[Name] <> N'Foo'
+ORDER BY [c].[Name]",
+                //
+                @"SELECT [t].[Name], [c.BornGears].[FullName], [c.BornGears].[Rank], [c.BornGears].[CityOrBirthName] AS [Name0]
+FROM [Gears] AS [c.BornGears]
+INNER JOIN (
+    SELECT [c0].[Name]
+    FROM [Cities] AS [c0]
+    WHERE [c0].[Name] <> N'Foo'
+) AS [t] ON [c.BornGears].[CityOrBirthName] = [t].[Name]
+WHERE [c.BornGears].[Discriminator] IN (N'Officer', N'Gear')
+ORDER BY [t].[Name]",
+                //
+                @"SELECT [t].[Name], [c.BornGears].[FullName], [c.BornGears].[Rank], [c.BornGears].[CityOrBirthName] AS [Name0]
+FROM [Gears] AS [c.BornGears]
+INNER JOIN (
+    SELECT [c0].[Name]
+    FROM [Cities] AS [c0]
+    WHERE [c0].[Name] <> N'Foo'
+) AS [t] ON [c.BornGears].[CityOrBirthName] = [t].[Name]
+WHERE [c.BornGears].[Discriminator] IN (N'Officer', N'Gear')
+ORDER BY [t].[Name]",
+                //
+                @"SELECT [t].[Name], [c.BornGears].[FullName], [c.BornGears].[Rank], [c.BornGears].[CityOrBirthName] AS [Name0]
+FROM [Gears] AS [c.BornGears]
+INNER JOIN (
+    SELECT [c0].[Name]
+    FROM [Cities] AS [c0]
+    WHERE [c0].[Name] <> N'Foo'
+) AS [t] ON [c.BornGears].[CityOrBirthName] = [t].[Name]
+WHERE [c.BornGears].[Discriminator] IN (N'Officer', N'Gear')
+ORDER BY [t].[Name]",
+                //
+                @"SELECT [t].[Name], [c.BornGears].[FullName], [c.BornGears].[Rank], [c.BornGears].[CityOrBirthName] AS [Name0]
+FROM [Gears] AS [c.BornGears]
+INNER JOIN (
+    SELECT [c0].[Name]
+    FROM [Cities] AS [c0]
+    WHERE [c0].[Name] <> N'Foo'
+) AS [t] ON [c.BornGears].[CityOrBirthName] = [t].[Name]
+WHERE [c.BornGears].[Discriminator] IN (N'Officer', N'Gear')
+ORDER BY [t].[Name]",
+                //
+                @"SELECT [t].[Name], [c.BornGears].[FullName], [c.BornGears].[Rank], [c.BornGears].[CityOrBirthName] AS [Name0]
+FROM [Gears] AS [c.BornGears]
+INNER JOIN (
+    SELECT [c0].[Name]
+    FROM [Cities] AS [c0]
+    WHERE [c0].[Name] <> N'Foo'
+) AS [t] ON [c.BornGears].[CityOrBirthName] = [t].[Name]
+WHERE [c.BornGears].[Discriminator] IN (N'Officer', N'Gear')
+ORDER BY [t].[Name]");
         }
 
         private void AssertSql(params string[] expected)

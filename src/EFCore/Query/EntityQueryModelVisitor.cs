@@ -215,7 +215,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                 QueryCompilationContext.DetermineQueryBufferRequirement(queryModel);
 
                 // TODO: hack
-                _isAsyncQuery = false;
+                _isAsyncQuery = true;
 
                 VisitQueryModel(queryModel);
 
@@ -1090,6 +1090,12 @@ namespace Microsoft.EntityFrameworkCore.Query
                 optimizedCorrelatedCollections = TryOptimizeCorrelatedCollections(queryModel);
             }
 
+
+            if (selectClause.Selector.ToString() == @"new AnonymousObject2(new [] {Convert(EF.Property(?[m.Mission]?, ""Id"")), Convert(Convert(EF.Property(?[m]?, ""SquadId""))), Convert(Convert(EF.Property(?[m]?, ""MissionId"")))})")
+            {
+
+            }
+
             var selector
                 = ReplaceClauseReferences(
                     _projectionExpressionVisitorFactory
@@ -1152,17 +1158,17 @@ namespace Microsoft.EntityFrameworkCore.Query
         // ReSharper disable once InconsistentNaming
         private static IAsyncEnumerable<TResult> _SelectAsync<TSource, TResult>(
             IAsyncEnumerable<TSource> source,
-            Func<TSource, int, CancellationToken, Task<TResult>> selector)
+            Func<TSource, CancellationToken, Task<TResult>> selector)
             => new AsyncSelectEnumerable<TSource, TResult>(source, selector);
 
         private class AsyncSelectEnumerable<TSource, TResult> : IAsyncEnumerable<TResult>
         {
             private readonly IAsyncEnumerable<TSource> _source;
-            private readonly Func<TSource, int, CancellationToken, Task<TResult>> _selector;
+            private readonly Func<TSource, CancellationToken, Task<TResult>> _selector;
 
             public AsyncSelectEnumerable(
                 IAsyncEnumerable<TSource> source,
-                Func<TSource, int, CancellationToken, Task<TResult>> selector)
+                Func<TSource, CancellationToken, Task<TResult>> selector)
             {
                 _source = source;
                 _selector = selector;
@@ -1173,14 +1179,12 @@ namespace Microsoft.EntityFrameworkCore.Query
             private class AsyncSelectEnumerator : IAsyncEnumerator<TResult>
             {
                 private readonly IAsyncEnumerator<TSource> _enumerator;
-                private readonly Func<TSource, int, CancellationToken, Task<TResult>> _selector;
-                private int _index;
+                private readonly Func<TSource, CancellationToken, Task<TResult>> _selector;
 
                 public AsyncSelectEnumerator(AsyncSelectEnumerable<TSource, TResult> enumerable)
                 {
                     _enumerator = enumerable._source.GetEnumerator();
                     _selector = enumerable._selector;
-                    _index = 0;
                 }
 
                 public async Task<bool> MoveNext(CancellationToken cancellationToken)
@@ -1190,8 +1194,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                         return false;
                     }
 
-                    Current = await _selector(_enumerator.Current, _index, cancellationToken);
-                    _index++;
+                    Current = await _selector(_enumerator.Current, cancellationToken);
 
                     return true;
                 }

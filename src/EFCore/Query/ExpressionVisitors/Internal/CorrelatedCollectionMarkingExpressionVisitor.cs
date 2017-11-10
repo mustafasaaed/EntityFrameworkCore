@@ -75,13 +75,18 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         {
             var subQueryModel = expression.QueryModel;
 
+            // TODO: nested correlated collecions are currently
+            subQueryModel.SelectClause.TransformExpressions(Visit); 
+
             if (subQueryModel.ResultOperators.Count == 0)
             {
                 var querySourceReferenceFindingExpressionTreeVisitor
-                    = new QuerySourceReferenceFindingExpressionTreeVisitor();
+                    = new QuerySourceReferenceFindingExpressionTreeVisitor2(subQueryModel.MainFromClause);
 
                 querySourceReferenceFindingExpressionTreeVisitor.Visit(subQueryModel.SelectClause.Selector);
-                if (querySourceReferenceFindingExpressionTreeVisitor.QuerySourceReferenceExpression?.ReferencedQuerySource == subQueryModel.MainFromClause)
+
+                if (querySourceReferenceFindingExpressionTreeVisitor.QuerySourceFound)
+                //if (querySourceReferenceFindingExpressionTreeVisitor.QuerySourceReferenceExpression?.ReferencedQuerySource == subQueryModel.MainFromClause)
                 {
                     var newExpression = _queryModelVisitor.BindNavigationPathPropertyExpression(
                         subQueryModel.MainFromClause.FromExpression,

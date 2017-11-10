@@ -66,7 +66,10 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             {
                 var parentQsre = new QuerySourceReferenceExpression(correlatedSubqueryMetadata.ParentQuerySource);
 
-                var result = Rewrite2(subQueryExpression.QueryModel, correlatedSubqueryMetadata.CollectionNavigation, parentQsre);
+                // TODO: make this less hacky!
+
+                var correlatedCollectionIndex = _queryCompilationContext.CorrelatedSubqueryMetadataMap.Keys.IndexOf(subQueryExpression.QueryModel);
+                var result = Rewrite2(correlatedCollectionIndex, subQueryExpression.QueryModel, correlatedSubqueryMetadata.CollectionNavigation, parentQsre);
 
                 return result;
             }
@@ -251,12 +254,12 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 
         private static MethodInfo _correlateSubqueryMethodInfo = typeof(IQueryBuffer).GetMethod(nameof(IQueryBuffer.CorrelateSubquery));
 
-        private int _correlatedCollectionCount = 0;
+        //private int _correlatedCollectionCount = 0;
 
 
 
 
-        private Expression Rewrite2(QueryModel collectionQueryModel, INavigation navigation, QuerySourceReferenceExpression originQuerySource)
+        private Expression Rewrite2(int correlatedCollectionIndex, QueryModel collectionQueryModel, INavigation navigation, QuerySourceReferenceExpression originQuerySource)
         {
             var querySourceReferenceFindingExpressionTreeVisitor
                 = new QuerySourceReferenceFindingExpressionTreeVisitor();
@@ -280,8 +283,8 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 
 
 
-            var originKey = BuildKeyAccess(_queryCompilationContext.Model.FindEntityType(originQuerySource.Type).FindPrimaryKey().Properties, originQuerySource);
-            var outerKey = BuildKeyAccess(navigation.ForeignKey.PrincipalKey.Properties, parentQuerySourceReferenceExpression);
+            var originKey = BuildKeyAccess(_queryCompilationContext.Model.FindEntityType(originQuerySource.Type).FindPrimaryKey().Properties, originQuerySource); // PK of the parent qsre
+            var outerKey = BuildKeyAccess(navigation.ForeignKey.PrincipalKey.Properties, parentQuerySourceReferenceExpression); // principal side of the FK relationship between parent and this collection
 
 
             var parentQuerySource = parentQuerySourceReferenceExpression.ReferencedQuerySource;
@@ -518,7 +521,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 
             var arguments = new List<Expression>
                     {
-                        Expression.Constant(_correlatedCollectionCount++),
+                        Expression.Constant(correlatedCollectionIndex),
                         _selectIndexParameter,
                         Expression.Constant(navigation),
                         outerKey,
@@ -532,6 +535,8 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                     nameof(QueryContext.QueryBuffer)),
                 correlateSubqueryMethod,
                 arguments);
+
+            var foo = new ExpressionPrinter().Print(result);
 
             return result;
         }
