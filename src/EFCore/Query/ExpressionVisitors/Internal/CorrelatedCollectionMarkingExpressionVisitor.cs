@@ -29,29 +29,29 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             _queryModelVisitor = queryModelVisitor;
         }
 
-        /// <summary>
-        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
-        /// </summary>
-        public void CloneParentQueryModelForCorrelatedSubqueries(QueryModel parentQueryModel)
-        {
-            var correlatedSubqueryMetadataWithoutParentQueryModel = _queryModelVisitor.QueryCompilationContext.CorrelatedSubqueryMetadataMap.Where(m => m.Value.ClonedParentQueryModel == null);
-            if (correlatedSubqueryMetadataWithoutParentQueryModel.Any())
-            {
-                var querySourceMapping = new QuerySourceMapping();
-                var clonedParentQueryModel = parentQueryModel.Clone(querySourceMapping);
-                clonedParentQueryModel.SelectClause = new SelectClause(Expression.Default(typeof(AnonymousObject2)));
-                clonedParentQueryModel.ResultTypeOverride = typeof(IQueryable<>).MakeGenericType(clonedParentQueryModel.SelectClause.Selector.Type);
+        ///// <summary>
+        /////     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        /////     directly from your code. This API may change or be removed in future releases.
+        ///// </summary>
+        //public void CloneParentQueryModelForCorrelatedSubqueries(QueryModel parentQueryModel)
+        //{
+        //    var correlatedSubqueryMetadataWithoutParentQueryModel = _queryModelVisitor.QueryCompilationContext.CorrelatedSubqueryMetadataMap.Where(m => m.Value.ClonedParentQueryModel == null);
+        //    if (correlatedSubqueryMetadataWithoutParentQueryModel.Any())
+        //    {
+        //        var querySourceMapping = new QuerySourceMapping();
+        //        var clonedParentQueryModel = parentQueryModel.Clone(querySourceMapping);
+        //        clonedParentQueryModel.SelectClause = new SelectClause(Expression.Default(typeof(AnonymousObject2)));
+        //        clonedParentQueryModel.ResultTypeOverride = typeof(IQueryable<>).MakeGenericType(clonedParentQueryModel.SelectClause.Selector.Type);
 
-                // TODO: update annotations here also?
+        //        // TODO: update annotations here also?
 
-                foreach (var correlatedSubqueryMetadata in correlatedSubqueryMetadataWithoutParentQueryModel)
-                {
-                    correlatedSubqueryMetadata.Value.QuerySourceMapping = querySourceMapping;
-                    correlatedSubqueryMetadata.Value.ClonedParentQueryModel = clonedParentQueryModel;
-                }
-            }
-        }
+        //        foreach (var correlatedSubqueryMetadata in correlatedSubqueryMetadataWithoutParentQueryModel)
+        //        {
+        //            correlatedSubqueryMetadata.Value.QuerySourceMapping = querySourceMapping;
+        //            correlatedSubqueryMetadata.Value.ClonedParentQueryModel = clonedParentQueryModel;
+        //        }
+        //    }
+        //}
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used

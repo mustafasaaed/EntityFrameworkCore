@@ -259,6 +259,54 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 
 
 
+
+        //private ICollection<Ordering> BuildOrderingsForParentQuery(
+        //    QueryModel queryModel, 
+        //    QuerySourceReferenceExpression originQsre, 
+        //    ICollection<Ordering> orderings)
+        //{
+        //    var originEntityType = _queryCompilationContext.Model.FindEntityType(originQsre.Type);
+        //    foreach (var property in originEntityType.FindPrimaryKey().Properties)
+        //    {
+        //        TryAddPropertyToOrderings(property, originQsre, orderings);
+        //    }
+
+
+
+
+
+
+        //    return orderings;
+        //}
+
+
+        private void TryAddPropertyToOrderings(
+            IProperty property, 
+            QuerySourceReferenceExpression propertyQsre, 
+            ICollection<Ordering> orderings)
+        {
+            var propertyExpression = propertyQsre.CreateEFPropertyExpression(property);
+
+            var orderingExpression = Expression.Convert(
+                new NullConditionalExpression(
+                    propertyQsre,
+                    propertyExpression),
+                propertyExpression.Type);
+
+            if (!orderings.Any(
+                o => _expressionEqualityComparer.Equals(o.Expression, orderingExpression)
+                     || (o.Expression.RemoveConvert() is MemberExpression memberExpression1
+                         && propertyExpression is MethodCallExpression methodCallExpression
+                         && MatchEfPropertyToMemberExpression(memberExpression1, methodCallExpression))
+                     || (o.Expression.RemoveConvert() is NullConditionalExpression nullConditionalExpression
+                         && nullConditionalExpression.AccessOperation is MemberExpression memberExpression
+                         && propertyExpression is MethodCallExpression methodCallExpression1
+                         && MatchEfPropertyToMemberExpression(memberExpression, methodCallExpression1))))
+            {
+                orderings.Add(new Ordering(orderingExpression, OrderingDirection.Asc));
+            }
+        }
+
         private Expression Rewrite2(int correlatedCollectionIndex, QueryModel collectionQueryModel, INavigation navigation, QuerySourceReferenceExpression originQuerySource)
         {
             var querySourceReferenceFindingExpressionTreeVisitor
@@ -289,24 +337,63 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 
             var parentQuerySource = parentQuerySourceReferenceExpression.ReferencedQuerySource;
 
-            BuildOriginQuerySourceOrderings(_parentQueryModel, originQuerySource, ParentOrderings);
-
-            BuildParentOrderings(
-                _parentQueryModel,
-                navigation,
-                parentQuerySourceReferenceExpression,
-                ParentOrderings);
 
 
+            // ordering priority for parent:
+            // - customer specified orderings
+            // - parent PK
+            // - principal side of the FK between parent and child
 
 
-            var querySourceMapping = _queryCompilationContext.CorrelatedSubqueryMetadataMap[collectionQueryModel].QuerySourceMapping;
-            var clonedParentQueryModel = _queryCompilationContext.CorrelatedSubqueryMetadataMap[collectionQueryModel].ClonedParentQueryModel;
+            // ordering priority for child:
+            // - customer specified orderings on parent (from join)
+            // - parent PK (from join)
+            // - dependent side of the FK between parent and child
+            // - customer specified orderings on child
+
+            //BuildOrderingsForParentQuery(_parentQueryModel, originQuerySource, parentOrderings);
 
 
-            //var querySourceMapping = new QuerySourceMapping();
-            //var clonedParentQueryModel = _parentQueryModel.Clone(querySourceMapping);
-            //_queryCompilationContext.UpdateMapping(querySourceMapping);
+            var parentOrderings = new List<Ordering>();
+            var exisingParentOrderByClause = _parentQueryModel.BodyClauses.OfType<OrderByClause>().LastOrDefault();
+            if (exisingParentOrderByClause != null)
+            {
+                parentOrderings.AddRange(exisingParentOrderByClause.Orderings);
+            }
+
+            var originEntityType = _queryCompilationContext.Model.FindEntityType(originQuerySource.Type);
+            foreach (var property in originEntityType.FindPrimaryKey().Properties)
+            {
+                TryAddPropertyToOrderings(property, originQuerySource, parentOrderings);
+            }
+
+            foreach (var property in navigation.ForeignKey.PrincipalKey.Properties)
+            {
+                TryAddPropertyToOrderings(property, parentQuerySourceReferenceExpression, parentOrderings);
+            }
+
+            ParentOrderings.AddRange(parentOrderings);
+            // TODO: except the existing ones?
+
+
+                //BuildOriginQuerySourceOrderings(_parentQueryModel, originQuerySource, ParentOrderings);
+
+                //BuildParentOrderings(
+                //_parentQueryModel,
+                //navigation,
+                //parentQuerySourceReferenceExpression,
+                //ParentOrderings);
+
+
+
+
+            //var querySourceMapping = _queryCompilationContext.CorrelatedSubqueryMetadataMap[collectionQueryModel].QuerySourceMapping;
+            //var clonedParentQueryModel = _queryCompilationContext.CorrelatedSubqueryMetadataMap[collectionQueryModel].ClonedParentQueryModel;
+
+
+            var querySourceMapping = new QuerySourceMapping();
+            var clonedParentQueryModel = _parentQueryModel.Clone(querySourceMapping);
+            _queryCompilationContext.UpdateMapping(querySourceMapping);
 
 
 
@@ -392,10 +479,16 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             _queryCompilationContext.AddQuerySourceRequiringMaterialization(joinQuerySourceReferenceExpression.ReferencedQuerySource);
 
             ApplyParentOrderings(
-                ParentOrderings,
+                parentOrderings,
                 clonedParentQueryModel,
                 querySourceMapping,
                 lastResultOperator);
+
+            //ApplyParentOrderings(
+            //    ParentOrderings,
+            //    clonedParentQueryModel,
+            //    querySourceMapping,
+            //    lastResultOperator);
 
             LiftOrderBy2(
                 clonedParentQuerySource,
@@ -411,7 +504,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                         typeof(object),
                         subQueryProjection));
 
-
+            clonedParentQueryModel.ResultTypeOverride = typeof(IQueryable<>).MakeGenericType(clonedParentQueryModel.SelectClause.Selector.Type);
 
             var newSelectorSecondArg = CloningExpressionVisitor
                     .AdjustExpressionAfterCloning(originKey, querySourceMapping);
@@ -515,7 +608,14 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                     });
 
 
-            collectionQueryModel.ResultTypeOverride = typeof(IEnumerable<>).MakeGenericType(collectionQueryModel.SelectClause.Selector.Type);
+            // Enumerable or OrderedEnumerable
+            collectionQueryModel.ResultTypeOverride = collectionQueryModel.BodyClauses.OfType<OrderByClause>().Any()
+                ? typeof(IOrderedEnumerable<>).MakeGenericType(collectionQueryModel.SelectClause.Selector.Type)
+                : typeof(IEnumerable<>).MakeGenericType(collectionQueryModel.SelectClause.Selector.Type);
+
+
+            //collectionQueryModel.ResultTypeOverride = collectionQueryModel.ResultTypeOverride.GetGenericTypeDefinition().MakeGenericType(collectionQueryModel.SelectClause.Selector.Type);
+            //collectionQueryModel.ResultTypeOverride = typeof(IEnumerable<>).MakeGenericType(collectionQueryModel.SelectClause.Selector.Type);
 
             var correlationPredicate = CreateCorrelationPredicate(navigation);
 
@@ -536,9 +636,8 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 correlateSubqueryMethod,
                 arguments);
 
-            var foo = new ExpressionPrinter().Print(result);
-
-            return result;
+            // TODO: hack!!!
+            return Expression.Convert(result, typeof(IOrderedEnumerable<>).MakeGenericType(result.Type.GetGenericArguments()[0]));
         }
 
         private void BuildOriginQuerySourceOrderings(
@@ -801,6 +900,9 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 queryModel.BodyClauses.Add(orderByClause = new OrderByClause());
             }
 
+            // TODO: improve this? - perhaps we can remember additional orderings and add only the necessary ones, rather than replacing everything?
+            orderByClause.Orderings.Clear();
+
             foreach (var ordering in parentOrderings)
             {
                 var newExpression
@@ -972,6 +1074,19 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 
                     outerOrderByClause.Orderings
                         .Add(new Ordering(newExpression, ordering.OrderingDirection));
+                }
+
+                // after we lifted the orderings, we need to appent the orderings that were applied to the query originally
+                // they should come after the ones that were lifted - we want to order by lifted properties first
+                var toQueryModelPreviousOrderByClause = toQueryModel.BodyClauses.OfType<OrderByClause>().LastOrDefault();
+                if (toQueryModelPreviousOrderByClause != null)
+                {
+                    foreach (var toQueryModelPreviousOrdering in toQueryModelPreviousOrderByClause.Orderings)
+                    {
+                        outerOrderByClause.Orderings.Add(toQueryModelPreviousOrdering);
+                    }
+
+                    toQueryModel.BodyClauses.Remove(toQueryModelPreviousOrderByClause);
                 }
 
                 toQueryModel.BodyClauses.Add(outerOrderByClause);

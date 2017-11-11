@@ -3176,7 +3176,27 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             using (var ctx = CreateContext())
             {
-                var query = ctx.Gears.OfType<Officer>().Select(o => o.Reports.Where(r => r.FullName != "Foo").Select(g => g.Weapons.Where(w => w.Name != "Bar")));
+                //var query = ctx.Gears.OfType<Officer>().Select(o => o.Reports.Where(r => r.FullName != "Foo"));
+
+                //var officers = query.ToList();
+
+                //foreach (var officer in officers)
+                //{
+                //    var reports = officer.ToList();
+                //}
+
+
+
+
+                var query = ctx.Gears
+                    .OfType<Officer>()
+                    .OrderByDescending(o => o.HasSoulPatch)
+                    .Select(o => o.Reports
+                        .Where(r => r.FullName != "Foo")
+                        .OrderBy(r => r.Rank)
+                        .Select(g => g.Weapons
+                            .Where(w => w.Name != "Bar")
+                            .OrderBy(w => w.IsAutomatic)));
 
                 var officers = query.ToList();
 

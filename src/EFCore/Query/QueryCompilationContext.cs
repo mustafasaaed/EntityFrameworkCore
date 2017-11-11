@@ -65,10 +65,10 @@ namespace Microsoft.EntityFrameworkCore.Query
             /// </summary>
             public IQuerySource ParentQuerySource { get; set; }
 
-            /// <summary>
-            ///     Cloned parent QueryModel that will be used to build correlating query.
-            /// </summary>
-            public QueryModel ClonedParentQueryModel { get; set; }
+            ///// <summary>
+            /////     Cloned parent QueryModel that will be used to build correlating query.
+            ///// </summary>
+            //public QueryModel ClonedParentQueryModel { get; set; }
 
             /// <summary>
             ///     QuerySourceMapping used during cloning.

@@ -1214,8 +1214,8 @@ namespace Microsoft.EntityFrameworkCore.Query
             var typeIsExpressionTranslatingVisitor = new TypeIsExpressionTranslatingVisitor(QueryCompilationContext.Model);
             queryModel.TransformExpressions(typeIsExpressionTranslatingVisitor.Visit);
 
-            var correlatedCollectionMarker = new CorrelatedCollectionMarkingExpressionVisitor(this);
-            correlatedCollectionMarker.CloneParentQueryModelForCorrelatedSubqueries(queryModel);
+            //var correlatedCollectionMarker = new CorrelatedCollectionMarkingExpressionVisitor(this);
+            //correlatedCollectionMarker.CloneParentQueryModelForCorrelatedSubqueries(queryModel);
         }
 
         /// <summary>
