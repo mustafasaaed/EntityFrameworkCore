@@ -78,7 +78,6 @@ namespace Microsoft.EntityFrameworkCore.Query
 
         // TODO: Can these be non-blocking?
         private bool _blockTaskExpressions = true;
-        private bool _isAsyncQuery = false;
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="EntityQueryModelVisitor" /> class.
@@ -162,7 +161,6 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             Check.NotNull(queryModel, nameof(queryModel));
 
-            _isAsyncQuery = false;
             using (QueryCompilationContext.Logger.Logger.BeginScope(this))
             {
                 QueryCompilationContext.Logger.QueryModelCompiling(queryModel);
@@ -171,7 +169,7 @@ namespace Microsoft.EntityFrameworkCore.Query
 
                 ExtractQueryAnnotations(queryModel);
 
-                OptimizeQueryModel(queryModel, _isAsyncQuery);
+                OptimizeQueryModel(queryModel, asyncQuery: false);
 
                 QueryCompilationContext.FindQuerySourcesRequiringMaterialization(this, queryModel);
                 QueryCompilationContext.DetermineQueryBufferRequirement(queryModel);
@@ -199,7 +197,6 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             Check.NotNull(queryModel, nameof(queryModel));
 
-            _isAsyncQuery = true;
             using (QueryCompilationContext.Logger.Logger.BeginScope(this))
             {
                 QueryCompilationContext.Logger.QueryModelCompiling(queryModel);
@@ -208,7 +205,7 @@ namespace Microsoft.EntityFrameworkCore.Query
 
                 ExtractQueryAnnotations(queryModel);
 
-                OptimizeQueryModel(queryModel, _isAsyncQuery);
+                OptimizeQueryModel(queryModel, asyncQuery: true);
 
                 QueryCompilationContext.FindQuerySourcesRequiringMaterialization(this, queryModel);
                 QueryCompilationContext.DetermineQueryBufferRequirement(queryModel);
@@ -1074,7 +1071,7 @@ namespace Microsoft.EntityFrameworkCore.Query
             var optimizedCorrelatedCollections = false;
 
             // TODO: for now optimization only works for sync queries
-            if (!_isAsyncQuery)
+            if (QueryCompilationContext.LinqOperatorProvider.Select.ReturnType.GetGenericTypeDefinition() != typeof(IAsyncEnumerable<>))
             {
                 optimizedCorrelatedCollections = TryOptimizeCorrelatedCollections(queryModel);
             }

@@ -604,6 +604,11 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             {
                 kv.Value?.Dispose();
             }
+
+            foreach (var kv in _childCollectionMetadata)
+            {
+                kv.Value.Enumerator?.Dispose();
+            }
         }
     }
 }
