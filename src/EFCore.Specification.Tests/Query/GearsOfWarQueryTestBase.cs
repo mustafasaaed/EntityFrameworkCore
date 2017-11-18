@@ -3078,13 +3078,26 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             using (var ctx = CreateContext())
             {
-
-                var query = ctx.Gears.Where(g => g.Nickname != "Marcus").Select(g => g.Weapons.Where(w => w.IsAutomatic || w.Name != "foo"));
+                var query = ctx.Gears.Where(g => g.Nickname != "Marcus").Select(g => g.Weapons.Where(w => w.IsAutomatic || w.Name != "foo").ToList());
                 var outers = query.ToList();
-                foreach (var outer in outers)
-                {
-                    var inners = outer.ToList();
-                }
+                //foreach (var outer in query)
+                //{
+                //    Console.WriteLine(outer.Count);
+                //}
+
+
+
+
+                //var e1 = query.GetEnumerator();
+                //var e2 = query.GetEnumerator();
+
+
+
+                //e1.MoveNext();
+
+                //e2.MoveNext();
+
+
             }
         }
 

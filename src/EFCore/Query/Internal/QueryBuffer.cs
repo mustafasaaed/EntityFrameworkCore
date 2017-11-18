@@ -32,27 +32,27 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         private readonly Dictionary<int, IDisposable> _includedCollections
             = new Dictionary<int, IDisposable>(); // IDisposable as IEnumerable/IAsyncEnumerable
 
-        private Dictionary<int, ChildCollectionMetadataElement> _childCollectionMetadata
-            = new Dictionary<int, ChildCollectionMetadataElement>();
+        //private readonly Dictionary<int, IDisposable> _correlatedCollections
+        //    = new Dictionary<int, IDisposable>();
 
-        private struct ChildCollectionMetadataElement
+        //private Dictionary<int, ChildCollectionMetadataElement> _childCollectionMetadata
+        //    = new Dictionary<int, ChildCollectionMetadataElement>();
+
+        private Dictionary<int, CorrelatedCollectionMetadataElement> _correlatedCollectionMetadata
+            = new Dictionary<int, CorrelatedCollectionMetadataElement>();
+
+        private struct CorrelatedCollectionMetadataElement
         {
-            public ChildCollectionMetadataElement(
-                IDisposable enumerator, 
-                int lastOuterElementIndex, 
-                int maxInnerElementIndex, 
-                Tuple<object, AnonymousObject2> previous)
+            public CorrelatedCollectionMetadataElement(
+                IDisposable enumerator,
+                AnonymousObject2 previousOriginKey)
             {
                 Enumerator = enumerator;
-                LastOuterElementIndex = lastOuterElementIndex;
-                MaxInnerElementIndex = maxInnerElementIndex;
-                Previous = previous;
+                PreviousOriginKey = previousOriginKey;
             }
 
             public IDisposable Enumerator { get; set; }
-            public int LastOuterElementIndex { get; set; }
-            public int MaxInnerElementIndex { get; set; }
-            public Tuple<object, AnonymousObject2> Previous { get; set; }
+            public AnonymousObject2 PreviousOriginKey { get; set; }
         }
 
         /// <summary>
@@ -498,32 +498,139 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             return identityMap;
         }
 
+        ///// <summary>
+        /////     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        /////     directly from your code. This API may change or be removed in future releases.
+        ///// </summary>
+        //public virtual IEnumerable<TInner> CorrelateSubquery<TInner>(
+        //    int childCollectionId,
+        //    int outerElementIndex,
+        //    INavigation navigation,
+        //    AnonymousObject2 outerKey,
+        //    Func<IEnumerable<Tuple<TInner, AnonymousObject2, AnonymousObject2>>> childCollectionElementFactory,
+        //    Func<AnonymousObject2, AnonymousObject2, bool> correlationnPredicate)
+        //{
+        //    IDisposable untypedEnumerator = null;
+        //    ChildCollectionMetadataElement childCollectionMetadataElement;
+        //    IEnumerator<Tuple<TInner, AnonymousObject2, AnonymousObject2>> enumerator = null;
+
+        //    if (!_childCollectionMetadata.TryGetValue(childCollectionId, out childCollectionMetadataElement))
+        //    {
+        //        enumerator = childCollectionElementFactory().GetEnumerator();
+
+        //        childCollectionMetadataElement = new ChildCollectionMetadataElement(enumerator, -1, -1, default);
+        //        _childCollectionMetadata[childCollectionId] = childCollectionMetadataElement;
+        //    }
+        //    else
+        //    {
+        //        untypedEnumerator = childCollectionMetadataElement.Enumerator;
+        //    }
+
+        //    if (enumerator == null)
+        //    {
+        //        if (untypedEnumerator == null)
+        //        {
+        //            yield break;
+        //        }
+
+        //        enumerator = (IEnumerator<Tuple<TInner, AnonymousObject2, AnonymousObject2>>)untypedEnumerator;
+        //    }
+
+        //    // = 1 - sequential
+        //    // > 1 - skipping forward, need to go thru reader until matching element is found or reaching end of the reader
+        //    // < 1 - got back to earlier element, need to reset reader and then look for elements till find a match (just like with skipping forward case)
+        //    var outerElementAccessDirection = outerElementIndex - childCollectionMetadataElement.LastOuterElementIndex;
+        //    if (outerElementAccessDirection < 1)
+        //    {
+        //        enumerator.Dispose();
+        //        enumerator = childCollectionElementFactory().GetEnumerator();
+        //        childCollectionMetadataElement.Enumerator = enumerator;
+        //        childCollectionMetadataElement.Previous = default;
+        //    }
+
+        //    childCollectionMetadataElement.LastOuterElementIndex = outerElementIndex;
+        //    _childCollectionMetadata[childCollectionId] = childCollectionMetadataElement;
+
+        //    var foundMatchingElement = false;
+        //    while (true)
+        //    {
+        //        bool shouldCorrelate = false;
+
+        //        if (childCollectionMetadataElement.Previous != null)
+        //        {
+        //            shouldCorrelate = correlationnPredicate(outerKey, childCollectionMetadataElement.Previous.Item2);
+        //        }
+        //        else
+        //        {
+        //            if (!enumerator.MoveNext())
+        //            {
+        //                enumerator.Dispose();
+        //                _childCollectionMetadata[childCollectionId] = default;
+
+        //                break;
+        //            }
+
+        //            shouldCorrelate = correlationnPredicate(outerKey, enumerator.Current.Item2);
+        //        }
+
+        //        foundMatchingElement |= shouldCorrelate;
+        //        childCollectionMetadataElement.Previous = default;
+
+        //        if (shouldCorrelate)
+        //        {
+        //            _childCollectionMetadata[childCollectionId] = childCollectionMetadataElement;
+
+        //            yield return enumerator.Current.Item1;
+        //        }
+        //        else
+        //        {
+        //            // if the current element is not correlated with the parent, store it for the next comparison
+        //            if (outerElementAccessDirection == 1 || foundMatchingElement)
+        //            {
+        //                childCollectionMetadataElement.Previous = new Tuple<object, AnonymousObject2>(enumerator.Current.Item1, enumerator.Current.Item2);
+        //                _childCollectionMetadata[childCollectionId] = childCollectionMetadataElement;
+
+        //                // if inner element doesnt match and we are in sequential access mode, this means that all inners for a given outer have been iterated over and we can break;
+        //                // in case of non-sequential access, we can only stop iterating if we have found a match earlier - otherwise we need to keep looking, until we find a match or reach end of the stream
+        //                break;
+        //            }
+        //        }
+        //    }
+        //}
+
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public virtual IEnumerable<TInner> CorrelateSubquery<TInner>(
             int childCollectionId,
-            int outerElementIndex,
+            int outerElementIndex, // TODO: remove
             INavigation navigation,
             AnonymousObject2 outerKey,
             Func<IEnumerable<Tuple<TInner, AnonymousObject2, AnonymousObject2>>> childCollectionElementFactory,
             Func<AnonymousObject2, AnonymousObject2, bool> correlationnPredicate)
         {
+
             IDisposable untypedEnumerator = null;
-            ChildCollectionMetadataElement childCollectionMetadataElement;
+            CorrelatedCollectionMetadataElement correlatedCollectionMetadataElement;
             IEnumerator<Tuple<TInner, AnonymousObject2, AnonymousObject2>> enumerator = null;
 
-            if (!_childCollectionMetadata.TryGetValue(childCollectionId, out childCollectionMetadataElement))
+            if (!_correlatedCollectionMetadata.TryGetValue(childCollectionId, out correlatedCollectionMetadataElement))
             {
                 enumerator = childCollectionElementFactory().GetEnumerator();
 
-                childCollectionMetadataElement = new ChildCollectionMetadataElement(enumerator, -1, -1, default);
-                _childCollectionMetadata[childCollectionId] = childCollectionMetadataElement;
+                if (!enumerator.MoveNext())
+                {
+                    enumerator.Dispose();
+                    enumerator = null;
+                }
+
+                correlatedCollectionMetadataElement = new CorrelatedCollectionMetadataElement(enumerator, default);
+                _correlatedCollectionMetadata[childCollectionId] = correlatedCollectionMetadataElement;
             }
             else
             {
-                untypedEnumerator = childCollectionMetadataElement.Enumerator;
+                untypedEnumerator = correlatedCollectionMetadataElement.Enumerator;
             }
 
             if (enumerator == null)
@@ -536,64 +643,47 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 enumerator = (IEnumerator<Tuple<TInner, AnonymousObject2, AnonymousObject2>>)untypedEnumerator;
             }
 
-            // = 1 - sequential
-            // > 1 - skipping forward, need to go thru reader until matching element is found or reaching end of the reader
-            // < 1 - got back to earlier element, need to reset reader and then look for elements till find a match (just like with skipping forward case)
-            var outerElementAccessDirection = outerElementIndex - childCollectionMetadataElement.LastOuterElementIndex;
-            if (outerElementAccessDirection < 1)
-            {
-                enumerator.Dispose();
-                enumerator = childCollectionElementFactory().GetEnumerator();
-                childCollectionMetadataElement.Enumerator = enumerator;
-                childCollectionMetadataElement.Previous = default;
-            }
-
-            childCollectionMetadataElement.LastOuterElementIndex = outerElementIndex;
-            _childCollectionMetadata[childCollectionId] = childCollectionMetadataElement;
-            
-            var foundMatchingElement = false;
             while (true)
             {
-                bool shouldCorrelate = false;
-
-                if (childCollectionMetadataElement.Previous != null)
+                if (enumerator == null)
                 {
-                    shouldCorrelate = correlationnPredicate(outerKey, childCollectionMetadataElement.Previous.Item2);
+                    yield break;
                 }
-                else
+
+                var shouldCorrelate = correlationnPredicate(outerKey, enumerator.Current.Item2);
+                if (shouldCorrelate)
                 {
+                    // if origin key changed, we need to yield break, even if the correlation predicate matches 
+                    // e.g. orders.Select(o => o.Customer.Addresses) - if there are 10 orders but only 5 customers, we still need 10 collections of addresses, even though some of the addresses belong to same customer
+                    if (!correlatedCollectionMetadataElement.PreviousOriginKey.IsDefault()
+                        && !enumerator.Current.Item3.Equals(correlatedCollectionMetadataElement.PreviousOriginKey))
+                    {
+                        correlatedCollectionMetadataElement.PreviousOriginKey = default;
+                        _correlatedCollectionMetadata[childCollectionId] = correlatedCollectionMetadataElement;
+
+                        yield break;
+                    }
+
+                    var result = enumerator.Current.Item1;
+
+                    correlatedCollectionMetadataElement.PreviousOriginKey = enumerator.Current.Item3;
+                    _correlatedCollectionMetadata[childCollectionId] = correlatedCollectionMetadataElement;
+
                     if (!enumerator.MoveNext())
                     {
                         enumerator.Dispose();
-                        _childCollectionMetadata[childCollectionId] = default;
-
-                        break;
+                        enumerator = null;
+                        _correlatedCollectionMetadata[childCollectionId] = default;
                     }
 
-                    shouldCorrelate = correlationnPredicate(outerKey, enumerator.Current.Item2);
-                }
-
-                foundMatchingElement |= shouldCorrelate;
-                childCollectionMetadataElement.Previous = default;
-
-                if (shouldCorrelate)
-                {
-                    _childCollectionMetadata[childCollectionId] = childCollectionMetadataElement;
-
-                    yield return enumerator.Current.Item1;
+                    yield return result;
                 }
                 else
                 {
-                    // if the current element is not correlated with the parent, store it for the next comparison
-                    if (outerElementAccessDirection == 1 || foundMatchingElement)
-                    {
-                        childCollectionMetadataElement.Previous = new Tuple<object, AnonymousObject2>(enumerator.Current.Item1, enumerator.Current.Item2);
-                        _childCollectionMetadata[childCollectionId] = childCollectionMetadataElement;
+                    correlatedCollectionMetadataElement.PreviousOriginKey = default;
+                    _correlatedCollectionMetadata[childCollectionId] = correlatedCollectionMetadataElement;
 
-                        // if inner element doesnt match and we are in sequential access mode, this means that all inners for a given outer have been iterated over and we can break;
-                        // in case of non-sequential access, we can only stop iterating if we have found a match earlier - otherwise we need to keep looking, until we find a match or reach end of the stream
-                        break;
-                    }
+                    yield break;
                 }
             }
         }
@@ -605,7 +695,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 kv.Value?.Dispose();
             }
 
-            foreach (var kv in _childCollectionMetadata)
+            foreach (var kv in _correlatedCollectionMetadata)
             {
                 kv.Value.Enumerator?.Dispose();
             }
