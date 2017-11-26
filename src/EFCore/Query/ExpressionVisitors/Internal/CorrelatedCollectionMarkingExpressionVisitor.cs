@@ -9,6 +9,9 @@ using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Query.Internal;
 using Remotion.Linq.Clauses.Expressions;
 using Remotion.Linq.Parsing;
+using Remotion.Linq;
+using Remotion.Linq.Clauses;
+using System.Collections.ObjectModel;
 
 namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 {
@@ -57,16 +60,21 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 
             var subQueryModel = expression.QueryModel;
 
+            // TODO: uncomment this to enable nested correlated collections (currently buggy for edge case scenarios)
             subQueryModel.SelectClause.TransformExpressions(Visit);
 
-            if (subQueryModel.ResultOperators.Count == 0)
-            {
-                var querySourceReferenceFindingExpressionTreeVisitor
-                    = new QuerySourceReferenceFindingExpressionTreeVisitor2(subQueryModel.MainFromClause);
+            var validator = new CorrelatedSubqueryOptimizationValidator();
+            if (validator.CanTryOptimizeCorreltedSubquery(subQueryModel))
+            { 
 
-                querySourceReferenceFindingExpressionTreeVisitor.Visit(subQueryModel.SelectClause.Selector);
+            //if (subQueryModel.ResultOperators.Count == 0)
+            //{
+            //    var querySourceReferenceFindingExpressionTreeVisitor
+            //        = new QuerySourceReferenceFindingExpressionTreeVisitor2(subQueryModel.MainFromClause);
 
-                if (querySourceReferenceFindingExpressionTreeVisitor.QuerySourceFound)
+            //    querySourceReferenceFindingExpressionTreeVisitor.Visit(subQueryModel.SelectClause.Selector);
+
+            //    if (querySourceReferenceFindingExpressionTreeVisitor.QuerySourceFound)
                 {
                     var newExpression = _queryModelVisitor.BindNavigationPathPropertyExpression(
                         subQueryModel.MainFromClause.FromExpression,
@@ -97,6 +105,132 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             }
 
             return base.VisitSubQuery(expression);
+        }
+
+        private class CorrelatedSubqueryOptimizationValidator
+        {
+            public bool CanTryOptimizeCorreltedSubquery(QueryModel queryModel)
+            {
+                if (queryModel.ResultOperators.Any())
+                {
+                    return false;
+                }
+
+                var querySourceReferenceFindingExpressionTreeVisitor
+                    = new QuerySourceReferenceFindingExpressionTreeVisitor2(queryModel.MainFromClause);
+
+                querySourceReferenceFindingExpressionTreeVisitor.Visit(queryModel.SelectClause.Selector);
+
+                if (!querySourceReferenceFindingExpressionTreeVisitor.QuerySourceFound)
+                {
+                    return false;
+                }
+
+                // first pass finds all the query sources declared in this scope (i.e. from clauses)
+                var foo = new Foo();
+                foo.VisitQueryModel(queryModel);
+
+                // second pass makes sure that all qsres reference only query sources that were discovered in the first step, i.e. nothing from the outside
+                var bar = new Barr(queryModel.MainFromClause, foo.QuerySources);
+                bar.VisitQueryModel(queryModel);
+
+                return bar.AllQuerySourceReferencesInScope;
+            }
+
+            private class Foo : QueryModelVisitorBase
+            {
+                public ISet<IQuerySource> QuerySources { get; } = new HashSet<IQuerySource>();
+
+                public override void VisitQueryModel(QueryModel queryModel)
+                {
+                    queryModel.TransformExpressions(new TransformingQueryModelExpressionVisitor<Foo>(this).Visit);
+
+                    base.VisitQueryModel(queryModel);
+                }
+
+                public override void VisitMainFromClause(MainFromClause fromClause, QueryModel queryModel)
+                {
+                    QuerySources.Add(fromClause);
+
+                    base.VisitMainFromClause(fromClause, queryModel);
+                }
+
+                public override void VisitAdditionalFromClause(AdditionalFromClause fromClause, QueryModel queryModel, int index)
+                {
+                    QuerySources.Add(fromClause);
+
+                    base.VisitAdditionalFromClause(fromClause, queryModel, index);
+                }
+            }
+
+            private class Barr : QueryModelVisitorBase
+            {
+                private class InnerVisitor : TransformingQueryModelExpressionVisitor<Barr>
+                {
+                    private ISet<IQuerySource> _querySourcesInScope;
+
+                    public InnerVisitor(ISet<IQuerySource> querySourcesInScope, Barr transformingQueryModelVisitor)
+                        : base(transformingQueryModelVisitor)
+                    {
+                        _querySourcesInScope = querySourcesInScope;
+                    }
+
+                    public bool AllQuerySourceReferencesInScope { get; private set; } = true;
+
+                    protected override Expression VisitQuerySourceReference(QuerySourceReferenceExpression expression)
+                    {
+                        if (!_querySourcesInScope.Contains(expression.ReferencedQuerySource))
+                        {
+                            AllQuerySourceReferencesInScope = false;
+                        }
+
+                        return base.VisitQuerySourceReference(expression);
+                    }
+                }
+
+                // query source that can reference something outside the scope, e.g. main from clause that contains the correlated navigation
+                private IQuerySource _exemptQuerySource;
+                private InnerVisitor _innerVisitor;
+
+                public Barr(IQuerySource exemptQuerySource, ISet<IQuerySource> querySourcesInScope)
+                {
+                    _exemptQuerySource = exemptQuerySource;
+                    _innerVisitor = new InnerVisitor(querySourcesInScope, this);
+                }
+
+                public bool AllQuerySourceReferencesInScope => _innerVisitor.AllQuerySourceReferencesInScope;
+
+                public override void VisitMainFromClause(MainFromClause fromClause, QueryModel queryModel)
+                {
+                    if (fromClause != _exemptQuerySource)
+                    {
+                        fromClause.TransformExpressions(_innerVisitor.Visit);
+                    }
+                }
+
+                protected override void VisitBodyClauses(ObservableCollection<IBodyClause> bodyClauses, QueryModel queryModel)
+                {
+                    foreach (var bodyClause in bodyClauses)
+                    {
+                        if (bodyClause != _exemptQuerySource)
+                        {
+                            bodyClause.TransformExpressions(_innerVisitor.Visit);
+                        }
+                    }
+                }
+
+                public override void VisitSelectClause(SelectClause selectClause, QueryModel queryModel)
+                {
+                    selectClause.TransformExpressions(_innerVisitor.Visit);
+                }
+
+                public override void VisitResultOperator(ResultOperatorBase resultOperator, QueryModel queryModel, int index)
+                {
+                    // in theory, it is not necessary to visit result ops at the moment, since we don't optimize subqueries that contain any result ops
+                    // however, we might support some result ops in the future
+                    resultOperator.TransformExpressions(_innerVisitor.Visit);
+                }
+            }
         }
     }
 }

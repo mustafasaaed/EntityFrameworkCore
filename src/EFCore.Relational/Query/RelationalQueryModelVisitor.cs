@@ -1059,9 +1059,8 @@ namespace Microsoft.EntityFrameworkCore.Query
         ///     Optimizes correlated collection navigations when possible
         /// </summary>
         /// <param name="queryModel"> Query model to run optimizations on. </param>
-        /// <param name="trackResults"> Value indicating whether results of the query should be tracked. </param>
         /// <returns> True if the query model was optimized, false otherwise. </returns>
-        protected override bool TryOptimizeCorrelatedCollections(QueryModel queryModel, bool trackResults)
+        protected override bool TryOptimizeCorrelatedCollections(QueryModel queryModel)
         {
             var canOptimizeCorrelatedCollections
                 = !RequiresClientEval
@@ -1069,6 +1068,13 @@ namespace Microsoft.EntityFrameworkCore.Query
                    && !RequiresClientJoin
                    && !RequiresClientFilter
                    && !RequiresClientOrderBy;
+
+            // disabled for cross joins - problem is outer query containig cross join can produce duplicate results
+            // and its hard to match them with the inner query
+            if (queryModel.BodyClauses.OfType<AdditionalFromClause>().Any())
+            {
+                return false;
+            }
 
             if (canOptimizeCorrelatedCollections)
             {

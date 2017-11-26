@@ -4438,7 +4438,30 @@ ORDER BY [t1].[HasSoulPatch] DESC, [t1].[Nickname], [t1].[SquadId], [t1].[Rank],
             base.Correlated_collections_same_collection_projected_multiple_times();
 
             AssertSql(
-                @"");
+                @"SELECT [g].[FullName]
+FROM [Gears] AS [g]
+WHERE [g].[Discriminator] IN (N'Officer', N'Gear')
+ORDER BY [g].[Nickname], [g].[SquadId], [g].[FullName]",
+                //
+                @"SELECT [g.Weapons].[Id], [g.Weapons].[AmmunitionType], [g.Weapons].[IsAutomatic], [g.Weapons].[Name], [g.Weapons].[OwnerFullName], [g.Weapons].[SynergyWithId], [t].[Nickname], [t].[SquadId], [t].[FullName]
+FROM [Weapons] AS [g.Weapons]
+INNER JOIN (
+    SELECT [g0].[Nickname], [g0].[SquadId], [g0].[FullName]
+    FROM [Gears] AS [g0]
+    WHERE [g0].[Discriminator] IN (N'Officer', N'Gear')
+) AS [t] ON [g.Weapons].[OwnerFullName] = [t].[FullName]
+WHERE [g.Weapons].[IsAutomatic] = 1
+ORDER BY [t].[Nickname], [t].[SquadId], [t].[FullName]",
+                //
+                @"SELECT [g.Weapons0].[Id], [g.Weapons0].[AmmunitionType], [g.Weapons0].[IsAutomatic], [g.Weapons0].[Name], [g.Weapons0].[OwnerFullName], [g.Weapons0].[SynergyWithId], [t0].[Nickname], [t0].[SquadId], [t0].[FullName]
+FROM [Weapons] AS [g.Weapons0]
+INNER JOIN (
+    SELECT [g1].[Nickname], [g1].[SquadId], [g1].[FullName]
+    FROM [Gears] AS [g1]
+    WHERE [g1].[Discriminator] IN (N'Officer', N'Gear')
+) AS [t0] ON [g.Weapons0].[OwnerFullName] = [t0].[FullName]
+WHERE [g.Weapons0].[IsAutomatic] = 1
+ORDER BY [t0].[Nickname], [t0].[SquadId], [t0].[FullName]");
         }
 
         public override void Correlated_collections_similar_collection_projected_multiple_times()
@@ -4446,7 +4469,30 @@ ORDER BY [t1].[HasSoulPatch] DESC, [t1].[Nickname], [t1].[SquadId], [t1].[Rank],
             base.Correlated_collections_similar_collection_projected_multiple_times();
 
             AssertSql(
-                @"");
+                @"SELECT [g].[FullName]
+FROM [Gears] AS [g]
+WHERE [g].[Discriminator] IN (N'Officer', N'Gear')
+ORDER BY [g].[Rank], [g].[Nickname], [g].[SquadId], [g].[FullName]",
+                //
+                @"SELECT [g.Weapons].[Id], [g.Weapons].[AmmunitionType], [g.Weapons].[IsAutomatic], [g.Weapons].[Name], [g.Weapons].[OwnerFullName], [g.Weapons].[SynergyWithId], [t].[Rank], [t].[Nickname], [t].[SquadId], [t].[FullName]
+FROM [Weapons] AS [g.Weapons]
+INNER JOIN (
+    SELECT [g0].[Rank], [g0].[Nickname], [g0].[SquadId], [g0].[FullName]
+    FROM [Gears] AS [g0]
+    WHERE [g0].[Discriminator] IN (N'Officer', N'Gear')
+) AS [t] ON [g.Weapons].[OwnerFullName] = [t].[FullName]
+WHERE [g.Weapons].[IsAutomatic] = 1
+ORDER BY [t].[Rank], [t].[Nickname], [t].[SquadId], [t].[FullName], [g.Weapons].[OwnerFullName]",
+                //
+                @"SELECT [g.Weapons0].[Id], [g.Weapons0].[AmmunitionType], [g.Weapons0].[IsAutomatic], [g.Weapons0].[Name], [g.Weapons0].[OwnerFullName], [g.Weapons0].[SynergyWithId], [t0].[Rank], [t0].[Nickname], [t0].[SquadId], [t0].[FullName]
+FROM [Weapons] AS [g.Weapons0]
+INNER JOIN (
+    SELECT [g1].[Rank], [g1].[Nickname], [g1].[SquadId], [g1].[FullName]
+    FROM [Gears] AS [g1]
+    WHERE [g1].[Discriminator] IN (N'Officer', N'Gear')
+) AS [t0] ON [g.Weapons0].[OwnerFullName] = [t0].[FullName]
+WHERE [g.Weapons0].[IsAutomatic] = 0
+ORDER BY [t0].[Rank], [t0].[Nickname], [t0].[SquadId], [t0].[FullName], [g.Weapons0].[IsAutomatic]");
         }
 
         public override void Correlated_collections_different_collections_projected()
@@ -4454,8 +4500,521 @@ ORDER BY [t1].[HasSoulPatch] DESC, [t1].[Nickname], [t1].[SquadId], [t1].[Rank],
             base.Correlated_collections_different_collections_projected();
 
             AssertSql(
+                @"SELECT [o].[Nickname], [o].[FullName], [o].[SquadId]
+FROM [Gears] AS [o]
+WHERE [o].[Discriminator] = N'Officer'
+ORDER BY [o].[FullName], [o].[Nickname], [o].[SquadId]",
+                //
+                @"SELECT [t].[FullName], [t].[Nickname], [t].[SquadId], [o.Weapons].[Name], [o.Weapons].[IsAutomatic], [o.Weapons].[OwnerFullName]
+FROM [Weapons] AS [o.Weapons]
+INNER JOIN (
+    SELECT [o0].[FullName], [o0].[Nickname], [o0].[SquadId]
+    FROM [Gears] AS [o0]
+    WHERE [o0].[Discriminator] = N'Officer'
+) AS [t] ON [o.Weapons].[OwnerFullName] = [t].[FullName]
+WHERE [o.Weapons].[IsAutomatic] = 1
+ORDER BY [t].[FullName], [t].[Nickname], [t].[SquadId]",
+                //
+                @"SELECT [t0].[FullName], [t0].[Nickname], [t0].[SquadId], [o.Reports].[Nickname] AS [Nickname0], [o.Reports].[Rank], [o.Reports].[LeaderNickname], [o.Reports].[LeaderSquadId]
+FROM [Gears] AS [o.Reports]
+INNER JOIN (
+    SELECT [o1].[FullName], [o1].[Nickname], [o1].[SquadId]
+    FROM [Gears] AS [o1]
+    WHERE [o1].[Discriminator] = N'Officer'
+) AS [t0] ON ([o.Reports].[LeaderNickname] = [t0].[Nickname]) AND ([o.Reports].[LeaderSquadId] = [t0].[SquadId])
+WHERE [o.Reports].[Discriminator] IN (N'Officer', N'Gear')
+ORDER BY [t0].[FullName], [t0].[Nickname], [t0].[SquadId], [o.Reports].[FullName]");
+        }
+
+        public override void Correlated_collections_multiple_nested_complex_collections()
+        {
+            base.Correlated_collections_multiple_nested_complex_collections();
+
+            AssertSql(
+                @"SELECT [o].[FullName] AS [FullName0], [o].[Nickname], [o].[SquadId], [t].[FullName]
+FROM [Gears] AS [o]
+LEFT JOIN [Tags] AS [o.Tag] ON ([o].[Nickname] = [o.Tag].[GearNickName]) AND ([o].[SquadId] = [o.Tag].[GearSquadId])
+LEFT JOIN (
+    SELECT [o.Tag.Gear].*
+    FROM [Gears] AS [o.Tag.Gear]
+    WHERE [o.Tag.Gear].[Discriminator] IN (N'Officer', N'Gear')
+) AS [t] ON ([o.Tag].[GearNickName] = [t].[Nickname]) AND ([o.Tag].[GearSquadId] = [t].[SquadId])
+WHERE ([o].[Discriminator] = N'Officer') AND EXISTS (
+    SELECT 1
+    FROM [Gears] AS [g]
+    WHERE [g].[Discriminator] IN (N'Officer', N'Gear') AND (([o].[Nickname] = [g].[LeaderNickname]) AND ([o].[SquadId] = [g].[LeaderSquadId])))
+ORDER BY [o].[HasSoulPatch] DESC, [o.Tag].[Note], [o].[Nickname], [o].[SquadId], [t].[FullName]",
+                //
+                @"SELECT [t1].[HasSoulPatch], [t1].[Note], [t1].[Nickname], [t1].[SquadId], [o.Reports].[FullName], [o.Reports].[LeaderNickname], [o.Reports].[LeaderSquadId]
+FROM [Gears] AS [o.Reports]
+INNER JOIN (
+    SELECT [o0].[HasSoulPatch], [o.Tag0].[Note], [o0].[Nickname], [o0].[SquadId]
+    FROM [Gears] AS [o0]
+    LEFT JOIN [Tags] AS [o.Tag0] ON ([o0].[Nickname] = [o.Tag0].[GearNickName]) AND ([o0].[SquadId] = [o.Tag0].[GearSquadId])
+    LEFT JOIN (
+        SELECT [o.Tag.Gear0].*
+        FROM [Gears] AS [o.Tag.Gear0]
+        WHERE [o.Tag.Gear0].[Discriminator] IN (N'Officer', N'Gear')
+    ) AS [t0] ON ([o.Tag0].[GearNickName] = [t0].[Nickname]) AND ([o.Tag0].[GearSquadId] = [t0].[SquadId])
+    WHERE ([o0].[Discriminator] = N'Officer') AND EXISTS (
+        SELECT 1
+        FROM [Gears] AS [g0]
+        WHERE [g0].[Discriminator] IN (N'Officer', N'Gear') AND (([o0].[Nickname] = [g0].[LeaderNickname]) AND ([o0].[SquadId] = [g0].[LeaderSquadId])))
+) AS [t1] ON ([o.Reports].[LeaderNickname] = [t1].[Nickname]) AND ([o.Reports].[LeaderSquadId] = [t1].[SquadId])
+WHERE [o.Reports].[Discriminator] IN (N'Officer', N'Gear') AND ([o.Reports].[FullName] <> N'Foo')
+ORDER BY [t1].[HasSoulPatch] DESC, [t1].[Note], [t1].[Nickname], [t1].[SquadId], [o.Reports].[Rank], [o.Reports].[Nickname], [o.Reports].[SquadId], [o.Reports].[FullName]",
+                //
+                @"SELECT [t4].[HasSoulPatch], [t4].[Note], [t4].[Nickname], [t4].[SquadId], [t4].[Rank], [t4].[Nickname0], [t4].[SquadId0], [t4].[FullName], [o.Reports.Weapons].[Id] AS [Id0], [t2].[FullName], [w.Owner.Squad].[Id], [o.Reports.Weapons].[OwnerFullName]
+FROM [Weapons] AS [o.Reports.Weapons]
+LEFT JOIN (
+    SELECT [w.Owner].*
+    FROM [Gears] AS [w.Owner]
+    WHERE [w.Owner].[Discriminator] IN (N'Officer', N'Gear')
+) AS [t2] ON [o.Reports.Weapons].[OwnerFullName] = [t2].[FullName]
+LEFT JOIN [Squads] AS [w.Owner.Squad] ON [t2].[SquadId] = [w.Owner.Squad].[Id]
+INNER JOIN (
+    SELECT [t3].[HasSoulPatch], [t3].[Note], [t3].[Nickname], [t3].[SquadId], [o.Reports0].[Rank], [o.Reports0].[Nickname] AS [Nickname0], [o.Reports0].[SquadId] AS [SquadId0], [o.Reports0].[FullName]
+    FROM [Gears] AS [o.Reports0]
+    INNER JOIN (
+        SELECT [o1].[HasSoulPatch], [o.Tag1].[Note], [o1].[Nickname], [o1].[SquadId]
+        FROM [Gears] AS [o1]
+        INNER JOIN [Tags] AS [o.Tag1] ON ([o1].[Nickname] = [o.Tag1].[GearNickName]) AND ([o1].[SquadId] = [o.Tag1].[GearSquadId])
+        INNER JOIN [Gears] AS [o.Tag.Gear1] ON ([o.Tag1].[GearNickName] = [o.Tag.Gear1].[Nickname]) AND ([o.Tag1].[GearSquadId] = [o.Tag.Gear1].[SquadId])
+        WHERE (([o1].[Discriminator] = N'Officer') AND [o.Tag.Gear1].[Discriminator] IN (N'Officer', N'Gear')) AND EXISTS (
+            SELECT 1
+            FROM [Gears] AS [g1]
+            WHERE [g1].[Discriminator] IN (N'Officer', N'Gear') AND (([o1].[Nickname] = [g1].[LeaderNickname]) AND ([o1].[SquadId] = [g1].[LeaderSquadId])))
+    ) AS [t3] ON ([o.Reports0].[LeaderNickname] = [t3].[Nickname]) AND ([o.Reports0].[LeaderSquadId] = [t3].[SquadId])
+    WHERE [o.Reports0].[Discriminator] IN (N'Officer', N'Gear') AND ([o.Reports0].[FullName] <> N'Foo')
+) AS [t4] ON [o.Reports.Weapons].[OwnerFullName] = [t4].[FullName]
+WHERE ([o.Reports.Weapons].[Name] <> N'Bar') OR [o.Reports.Weapons].[Name] IS NULL
+ORDER BY [t4].[HasSoulPatch] DESC, [t4].[Note], [t4].[Nickname], [t4].[SquadId], [t4].[Rank], [t4].[Nickname0], [t4].[SquadId0], [t4].[FullName], [o.Reports.Weapons].[IsAutomatic], [o.Reports.Weapons].[Id], [t2].[FullName], [w.Owner.Squad].[Id]",
+                //
+                @"SELECT [t8].[HasSoulPatch], [t8].[Note], [t8].[Nickname], [t8].[SquadId], [t8].[Rank], [t8].[Nickname0], [t8].[SquadId0], [t8].[FullName], [t8].[IsAutomatic], [t8].[Id], [t8].[FullName0], [w.Owner.Weapons].[Name], [w.Owner.Weapons].[IsAutomatic] AS [IsAutomatic0], [w.Owner.Weapons].[OwnerFullName]
+FROM [Weapons] AS [w.Owner.Weapons]
+INNER JOIN (
+    SELECT [t7].[HasSoulPatch], [t7].[Note], [t7].[Nickname], [t7].[SquadId], [t7].[Rank], [t7].[Nickname0], [t7].[SquadId0], [t7].[FullName], [o.Reports.Weapons0].[IsAutomatic], [o.Reports.Weapons0].[Id], [t5].[FullName] AS [FullName0]
+    FROM [Weapons] AS [o.Reports.Weapons0]
+    LEFT JOIN (
+        SELECT [w.Owner0].*
+        FROM [Gears] AS [w.Owner0]
+        WHERE [w.Owner0].[Discriminator] IN (N'Officer', N'Gear')
+    ) AS [t5] ON [o.Reports.Weapons0].[OwnerFullName] = [t5].[FullName]
+    LEFT JOIN [Squads] AS [w.Owner.Squad0] ON [t5].[SquadId] = [w.Owner.Squad0].[Id]
+    INNER JOIN (
+        SELECT [t6].[HasSoulPatch], [t6].[Note], [t6].[Nickname], [t6].[SquadId], [o.Reports1].[Rank], [o.Reports1].[Nickname] AS [Nickname0], [o.Reports1].[SquadId] AS [SquadId0], [o.Reports1].[FullName]
+        FROM [Gears] AS [o.Reports1]
+        INNER JOIN (
+            SELECT [o2].[HasSoulPatch], [o.Tag2].[Note], [o2].[Nickname], [o2].[SquadId]
+            FROM [Gears] AS [o2]
+            INNER JOIN [Tags] AS [o.Tag2] ON ([o2].[Nickname] = [o.Tag2].[GearNickName]) AND ([o2].[SquadId] = [o.Tag2].[GearSquadId])
+            INNER JOIN [Gears] AS [o.Tag.Gear2] ON ([o.Tag2].[GearNickName] = [o.Tag.Gear2].[Nickname]) AND ([o.Tag2].[GearSquadId] = [o.Tag.Gear2].[SquadId])
+            WHERE (([o2].[Discriminator] = N'Officer') AND [o.Tag.Gear2].[Discriminator] IN (N'Officer', N'Gear')) AND EXISTS (
+                SELECT 1
+                FROM [Gears] AS [g2]
+                WHERE [g2].[Discriminator] IN (N'Officer', N'Gear') AND (([o2].[Nickname] = [g2].[LeaderNickname]) AND ([o2].[SquadId] = [g2].[LeaderSquadId])))
+        ) AS [t6] ON ([o.Reports1].[LeaderNickname] = [t6].[Nickname]) AND ([o.Reports1].[LeaderSquadId] = [t6].[SquadId])
+        WHERE [o.Reports1].[Discriminator] IN (N'Officer', N'Gear') AND ([o.Reports1].[FullName] <> N'Foo')
+    ) AS [t7] ON [o.Reports.Weapons0].[OwnerFullName] = [t7].[FullName]
+    WHERE ([o.Reports.Weapons0].[Name] <> N'Bar') OR [o.Reports.Weapons0].[Name] IS NULL
+) AS [t8] ON [w.Owner.Weapons].[OwnerFullName] = [t8].[FullName0]
+ORDER BY [t8].[HasSoulPatch] DESC, [t8].[Note], [t8].[Nickname], [t8].[SquadId], [t8].[Rank], [t8].[Nickname0], [t8].[SquadId0], [t8].[FullName], [t8].[IsAutomatic], [t8].[Id], [t8].[FullName0]",
+                //
+                @"SELECT [t12].[HasSoulPatch], [t12].[Note], [t12].[Nickname], [t12].[SquadId], [t12].[Rank], [t12].[Nickname0], [t12].[SquadId0], [t12].[FullName], [t12].[IsAutomatic], [t12].[Id], [t12].[Id0], [w.Owner.Squad.Members].[Nickname] AS [Nickname1], [w.Owner.Squad.Members].[HasSoulPatch] AS [HasSoulPatch0], [w.Owner.Squad.Members].[SquadId]
+FROM [Gears] AS [w.Owner.Squad.Members]
+INNER JOIN (
+    SELECT [t11].[HasSoulPatch], [t11].[Note], [t11].[Nickname], [t11].[SquadId], [t11].[Rank], [t11].[Nickname0], [t11].[SquadId0], [t11].[FullName], [o.Reports.Weapons1].[IsAutomatic], [o.Reports.Weapons1].[Id], [w.Owner.Squad1].[Id] AS [Id0]
+    FROM [Weapons] AS [o.Reports.Weapons1]
+    LEFT JOIN (
+        SELECT [w.Owner1].*
+        FROM [Gears] AS [w.Owner1]
+        WHERE [w.Owner1].[Discriminator] IN (N'Officer', N'Gear')
+    ) AS [t9] ON [o.Reports.Weapons1].[OwnerFullName] = [t9].[FullName]
+    LEFT JOIN [Squads] AS [w.Owner.Squad1] ON [t9].[SquadId] = [w.Owner.Squad1].[Id]
+    INNER JOIN (
+        SELECT [t10].[HasSoulPatch], [t10].[Note], [t10].[Nickname], [t10].[SquadId], [o.Reports2].[Rank], [o.Reports2].[Nickname] AS [Nickname0], [o.Reports2].[SquadId] AS [SquadId0], [o.Reports2].[FullName]
+        FROM [Gears] AS [o.Reports2]
+        INNER JOIN (
+            SELECT [o3].[HasSoulPatch], [o.Tag3].[Note], [o3].[Nickname], [o3].[SquadId]
+            FROM [Gears] AS [o3]
+            INNER JOIN [Tags] AS [o.Tag3] ON ([o3].[Nickname] = [o.Tag3].[GearNickName]) AND ([o3].[SquadId] = [o.Tag3].[GearSquadId])
+            INNER JOIN [Gears] AS [o.Tag.Gear3] ON ([o.Tag3].[GearNickName] = [o.Tag.Gear3].[Nickname]) AND ([o.Tag3].[GearSquadId] = [o.Tag.Gear3].[SquadId])
+            WHERE (([o3].[Discriminator] = N'Officer') AND [o.Tag.Gear3].[Discriminator] IN (N'Officer', N'Gear')) AND EXISTS (
+                SELECT 1
+                FROM [Gears] AS [g3]
+                WHERE [g3].[Discriminator] IN (N'Officer', N'Gear') AND (([o3].[Nickname] = [g3].[LeaderNickname]) AND ([o3].[SquadId] = [g3].[LeaderSquadId])))
+        ) AS [t10] ON ([o.Reports2].[LeaderNickname] = [t10].[Nickname]) AND ([o.Reports2].[LeaderSquadId] = [t10].[SquadId])
+        WHERE [o.Reports2].[Discriminator] IN (N'Officer', N'Gear') AND ([o.Reports2].[FullName] <> N'Foo')
+    ) AS [t11] ON [o.Reports.Weapons1].[OwnerFullName] = [t11].[FullName]
+    WHERE ([o.Reports.Weapons1].[Name] <> N'Bar') OR [o.Reports.Weapons1].[Name] IS NULL
+) AS [t12] ON [w.Owner.Squad.Members].[SquadId] = [t12].[Id0]
+WHERE [w.Owner.Squad.Members].[Discriminator] IN (N'Officer', N'Gear')
+ORDER BY [t12].[HasSoulPatch] DESC, [t12].[Note], [t12].[Nickname], [t12].[SquadId], [t12].[Rank], [t12].[Nickname0], [t12].[SquadId0], [t12].[FullName], [t12].[IsAutomatic], [t12].[Id], [t12].[Id0], [Nickname1]",
+                //
+                @"SELECT [o.Tag.Gear.Weapons].[Id], [o.Tag.Gear.Weapons].[AmmunitionType], [o.Tag.Gear.Weapons].[IsAutomatic], [o.Tag.Gear.Weapons].[Name], [o.Tag.Gear.Weapons].[OwnerFullName], [o.Tag.Gear.Weapons].[SynergyWithId], [t15].[HasSoulPatch], [t15].[Note], [t15].[Nickname], [t15].[SquadId], [t15].[FullName]
+FROM [Weapons] AS [o.Tag.Gear.Weapons]
+LEFT JOIN (
+    SELECT [www.Owner].*
+    FROM [Gears] AS [www.Owner]
+    WHERE [www.Owner].[Discriminator] IN (N'Officer', N'Gear')
+) AS [t13] ON [o.Tag.Gear.Weapons].[OwnerFullName] = [t13].[FullName]
+INNER JOIN (
+    SELECT [o4].[HasSoulPatch], [o.Tag4].[Note], [o4].[Nickname], [o4].[SquadId], [t14].[FullName]
+    FROM [Gears] AS [o4]
+    LEFT JOIN [Tags] AS [o.Tag4] ON ([o4].[Nickname] = [o.Tag4].[GearNickName]) AND ([o4].[SquadId] = [o.Tag4].[GearSquadId])
+    LEFT JOIN (
+        SELECT [o.Tag.Gear4].*
+        FROM [Gears] AS [o.Tag.Gear4]
+        WHERE [o.Tag.Gear4].[Discriminator] IN (N'Officer', N'Gear')
+    ) AS [t14] ON ([o.Tag4].[GearNickName] = [t14].[Nickname]) AND ([o.Tag4].[GearSquadId] = [t14].[SquadId])
+    WHERE ([o4].[Discriminator] = N'Officer') AND EXISTS (
+        SELECT 1
+        FROM [Gears] AS [g4]
+        WHERE [g4].[Discriminator] IN (N'Officer', N'Gear') AND (([o4].[Nickname] = [g4].[LeaderNickname]) AND ([o4].[SquadId] = [g4].[LeaderSquadId])))
+) AS [t15] ON [o.Tag.Gear.Weapons].[OwnerFullName] = [t15].[FullName]
+ORDER BY [t15].[HasSoulPatch] DESC, [t15].[Note], [t15].[Nickname], [t15].[SquadId], [t15].[FullName], [o.Tag.Gear.Weapons].[IsAutomatic], [t13].[Nickname] DESC");
+        }
+
+        public override void Correlated_collections_inner_subquery_selector_references_outer_qsre()
+        {
+            base.Correlated_collections_inner_subquery_selector_references_outer_qsre();
+
+            AssertSql(
+                @"SELECT [o].[FullName], [o].[Nickname], [o].[SquadId]
+FROM [Gears] AS [o]
+WHERE [o].[Discriminator] = N'Officer'",
+                //
+                @"@_outer_FullName='Damon Baird' (Size = 4000)
+@_outer_Nickname='Baird' (Size = 450)
+@_outer_SquadId='1'
+
+SELECT [r].[FullName] AS [ReportName], @_outer_FullName AS [OfficerName]
+FROM [Gears] AS [r]
+WHERE [r].[Discriminator] IN (N'Officer', N'Gear') AND ((@_outer_Nickname = [r].[LeaderNickname]) AND (@_outer_SquadId = [r].[LeaderSquadId]))",
+                //
+                @"@_outer_FullName='Marcus Fenix' (Size = 4000)
+@_outer_Nickname='Marcus' (Size = 450)
+@_outer_SquadId='1'
+
+SELECT [r].[FullName] AS [ReportName], @_outer_FullName AS [OfficerName]
+FROM [Gears] AS [r]
+WHERE [r].[Discriminator] IN (N'Officer', N'Gear') AND ((@_outer_Nickname = [r].[LeaderNickname]) AND (@_outer_SquadId = [r].[LeaderSquadId]))");
+        }
+
+        public override void Correlated_collections_inner_subquery_predicate_references_outer_qsre()
+        {
+            base.Correlated_collections_inner_subquery_predicate_references_outer_qsre();
+
+            AssertSql(
+                @"SELECT [o].[FullName], [o].[Nickname], [o].[SquadId]
+FROM [Gears] AS [o]
+WHERE [o].[Discriminator] = N'Officer'",
+                //
+                @"@_outer_FullName='Damon Baird' (Size = 4000)
+@_outer_Nickname='Baird' (Size = 450)
+@_outer_SquadId='1'
+
+SELECT [r].[FullName] AS [ReportName]
+FROM [Gears] AS [r]
+WHERE ([r].[Discriminator] IN (N'Officer', N'Gear') AND (@_outer_FullName <> N'Foo')) AND ((@_outer_Nickname = [r].[LeaderNickname]) AND (@_outer_SquadId = [r].[LeaderSquadId]))",
+                //
+                @"@_outer_FullName='Marcus Fenix' (Size = 4000)
+@_outer_Nickname='Marcus' (Size = 450)
+@_outer_SquadId='1'
+
+SELECT [r].[FullName] AS [ReportName]
+FROM [Gears] AS [r]
+WHERE ([r].[Discriminator] IN (N'Officer', N'Gear') AND (@_outer_FullName <> N'Foo')) AND ((@_outer_Nickname = [r].[LeaderNickname]) AND (@_outer_SquadId = [r].[LeaderSquadId]))");
+        }
+
+        public override void Correlated_collections_nested_inner_subquery_references_outer_qsre_one_level_up()
+        {
+            base.Correlated_collections_nested_inner_subquery_references_outer_qsre_one_level_up();
+
+            AssertSql(
+                @"SELECT [o].[FullName], [o].[Nickname], [o].[SquadId]
+FROM [Gears] AS [o]
+WHERE [o].[Discriminator] = N'Officer'
+ORDER BY [o].[Nickname], [o].[SquadId]",
+                //
+                @"SELECT [t].[Nickname], [t].[SquadId], [o.Reports].[FullName], [o.Reports].[Nickname], [o.Reports].[LeaderNickname], [o.Reports].[LeaderSquadId]
+FROM [Gears] AS [o.Reports]
+INNER JOIN (
+    SELECT [o0].[Nickname], [o0].[SquadId]
+    FROM [Gears] AS [o0]
+    WHERE [o0].[Discriminator] = N'Officer'
+) AS [t] ON ([o.Reports].[LeaderNickname] = [t].[Nickname]) AND ([o.Reports].[LeaderSquadId] = [t].[SquadId])
+WHERE [o.Reports].[Discriminator] IN (N'Officer', N'Gear') AND ([o.Reports].[FullName] <> N'Foo')
+ORDER BY [t].[Nickname], [t].[SquadId]",
+                //
+                @"@_outer_Nickname='Paduk' (Size = 4000)
+@_outer_FullName='Garron Paduk' (Size = 450)
+
+SELECT [w].[Name], @_outer_Nickname AS [Nickname]
+FROM [Weapons] AS [w]
+WHERE (([w].[Name] <> N'Bar') OR [w].[Name] IS NULL) AND (@_outer_FullName = [w].[OwnerFullName])",
+                //
+                @"@_outer_Nickname='Cole Train' (Size = 4000)
+@_outer_FullName='Augustus Cole' (Size = 450)
+
+SELECT [w].[Name], @_outer_Nickname AS [Nickname]
+FROM [Weapons] AS [w]
+WHERE (([w].[Name] <> N'Bar') OR [w].[Name] IS NULL) AND (@_outer_FullName = [w].[OwnerFullName])",
+                //
+                @"@_outer_Nickname='Baird' (Size = 4000)
+@_outer_FullName='Damon Baird' (Size = 450)
+
+SELECT [w].[Name], @_outer_Nickname AS [Nickname]
+FROM [Weapons] AS [w]
+WHERE (([w].[Name] <> N'Bar') OR [w].[Name] IS NULL) AND (@_outer_FullName = [w].[OwnerFullName])",
+                //
+                @"@_outer_Nickname='Dom' (Size = 4000)
+@_outer_FullName='Dominic Santiago' (Size = 450)
+
+SELECT [w].[Name], @_outer_Nickname AS [Nickname]
+FROM [Weapons] AS [w]
+WHERE (([w].[Name] <> N'Bar') OR [w].[Name] IS NULL) AND (@_outer_FullName = [w].[OwnerFullName])");
+        }
+
+        public override void Correlated_collections_nested_inner_subquery_references_outer_qsre_two_levels_up()
+        {
+            base.Correlated_collections_nested_inner_subquery_references_outer_qsre_two_levels_up();
+
+            AssertSql(
+                @"SELECT [o].[FullName], [o].[Nickname], [o].[SquadId]
+FROM [Gears] AS [o]
+WHERE [o].[Discriminator] = N'Officer'",
+                //
+                @"@_outer_Nickname='Baird' (Size = 450)
+@_outer_SquadId='1'
+
+SELECT [r].[FullName]
+FROM [Gears] AS [r]
+WHERE ([r].[Discriminator] IN (N'Officer', N'Gear') AND ([r].[FullName] <> N'Foo')) AND ((@_outer_Nickname = [r].[LeaderNickname]) AND (@_outer_SquadId = [r].[LeaderSquadId]))",
+                //
+                @"@_outer_Nickname1='Baird' (Size = 4000)
+@_outer_FullName='Garron Paduk' (Size = 450)
+
+SELECT [w].[Name], @_outer_Nickname1 AS [Nickname]
+FROM [Weapons] AS [w]
+WHERE (([w].[Name] <> N'Bar') OR [w].[Name] IS NULL) AND (@_outer_FullName = [w].[OwnerFullName])",
+                //
+                @"@_outer_Nickname='Marcus' (Size = 450)
+@_outer_SquadId='1'
+
+SELECT [r].[FullName]
+FROM [Gears] AS [r]
+WHERE ([r].[Discriminator] IN (N'Officer', N'Gear') AND ([r].[FullName] <> N'Foo')) AND ((@_outer_Nickname = [r].[LeaderNickname]) AND (@_outer_SquadId = [r].[LeaderSquadId]))",
+                //
+                @"@_outer_Nickname1='Marcus' (Size = 4000)
+@_outer_FullName='Augustus Cole' (Size = 450)
+
+SELECT [w].[Name], @_outer_Nickname1 AS [Nickname]
+FROM [Weapons] AS [w]
+WHERE (([w].[Name] <> N'Bar') OR [w].[Name] IS NULL) AND (@_outer_FullName = [w].[OwnerFullName])",
+                //
+                @"@_outer_Nickname1='Marcus' (Size = 4000)
+@_outer_FullName='Damon Baird' (Size = 450)
+
+SELECT [w].[Name], @_outer_Nickname1 AS [Nickname]
+FROM [Weapons] AS [w]
+WHERE (([w].[Name] <> N'Bar') OR [w].[Name] IS NULL) AND (@_outer_FullName = [w].[OwnerFullName])",
+                //
+                @"@_outer_Nickname1='Marcus' (Size = 4000)
+@_outer_FullName='Dominic Santiago' (Size = 450)
+
+SELECT [w].[Name], @_outer_Nickname1 AS [Nickname]
+FROM [Weapons] AS [w]
+WHERE (([w].[Name] <> N'Bar') OR [w].[Name] IS NULL) AND (@_outer_FullName = [w].[OwnerFullName])");
+        }
+
+        public override void Correlated_collections_on_select_many()
+        {
+            base.Correlated_collections_on_select_many();
+
+            AssertSql(
+                @"SELECT [g].[Nickname] AS [GearNickname], [s].[Name] AS [SquadName], [g].[FullName], [s].[Id]
+FROM [Gears] AS [g]
+CROSS JOIN [Squads] AS [s]
+WHERE [g].[Discriminator] IN (N'Officer', N'Gear') AND ([g].[HasSoulPatch] = 1)
+ORDER BY [GearNickname], [s].[Id] DESC",
+                //
+                @"@_outer_FullName='Damon Baird' (Size = 450)
+
+SELECT [w].[Id], [w].[AmmunitionType], [w].[IsAutomatic], [w].[Name], [w].[OwnerFullName], [w].[SynergyWithId]
+FROM [Weapons] AS [w]
+WHERE (([w].[IsAutomatic] = 1) OR (([w].[Name] <> N'foo') OR [w].[Name] IS NULL)) AND (@_outer_FullName = [w].[OwnerFullName])",
+                //
+                @"@_outer_Id='2'
+
+SELECT [m].[Nickname], [m].[SquadId], [m].[AssignedCityName], [m].[CityOrBirthName], [m].[Discriminator], [m].[FullName], [m].[HasSoulPatch], [m].[LeaderNickname], [m].[LeaderSquadId], [m].[Rank]
+FROM [Gears] AS [m]
+WHERE ([m].[Discriminator] IN (N'Officer', N'Gear') AND ([m].[HasSoulPatch] = 0)) AND (@_outer_Id = [m].[SquadId])",
+                //
+                @"@_outer_FullName='Damon Baird' (Size = 450)
+
+SELECT [w].[Id], [w].[AmmunitionType], [w].[IsAutomatic], [w].[Name], [w].[OwnerFullName], [w].[SynergyWithId]
+FROM [Weapons] AS [w]
+WHERE (([w].[IsAutomatic] = 1) OR (([w].[Name] <> N'foo') OR [w].[Name] IS NULL)) AND (@_outer_FullName = [w].[OwnerFullName])",
+                //
+                @"@_outer_Id='1'
+
+SELECT [m].[Nickname], [m].[SquadId], [m].[AssignedCityName], [m].[CityOrBirthName], [m].[Discriminator], [m].[FullName], [m].[HasSoulPatch], [m].[LeaderNickname], [m].[LeaderSquadId], [m].[Rank]
+FROM [Gears] AS [m]
+WHERE ([m].[Discriminator] IN (N'Officer', N'Gear') AND ([m].[HasSoulPatch] = 0)) AND (@_outer_Id = [m].[SquadId])",
+                //
+                @"@_outer_FullName='Marcus Fenix' (Size = 450)
+
+SELECT [w].[Id], [w].[AmmunitionType], [w].[IsAutomatic], [w].[Name], [w].[OwnerFullName], [w].[SynergyWithId]
+FROM [Weapons] AS [w]
+WHERE (([w].[IsAutomatic] = 1) OR (([w].[Name] <> N'foo') OR [w].[Name] IS NULL)) AND (@_outer_FullName = [w].[OwnerFullName])",
+                //
+                @"@_outer_Id='2'
+
+SELECT [m].[Nickname], [m].[SquadId], [m].[AssignedCityName], [m].[CityOrBirthName], [m].[Discriminator], [m].[FullName], [m].[HasSoulPatch], [m].[LeaderNickname], [m].[LeaderSquadId], [m].[Rank]
+FROM [Gears] AS [m]
+WHERE ([m].[Discriminator] IN (N'Officer', N'Gear') AND ([m].[HasSoulPatch] = 0)) AND (@_outer_Id = [m].[SquadId])",
+                //
+                @"@_outer_FullName='Marcus Fenix' (Size = 450)
+
+SELECT [w].[Id], [w].[AmmunitionType], [w].[IsAutomatic], [w].[Name], [w].[OwnerFullName], [w].[SynergyWithId]
+FROM [Weapons] AS [w]
+WHERE (([w].[IsAutomatic] = 1) OR (([w].[Name] <> N'foo') OR [w].[Name] IS NULL)) AND (@_outer_FullName = [w].[OwnerFullName])",
+                //
+                @"@_outer_Id='1'
+
+SELECT [m].[Nickname], [m].[SquadId], [m].[AssignedCityName], [m].[CityOrBirthName], [m].[Discriminator], [m].[FullName], [m].[HasSoulPatch], [m].[LeaderNickname], [m].[LeaderSquadId], [m].[Rank]
+FROM [Gears] AS [m]
+WHERE ([m].[Discriminator] IN (N'Officer', N'Gear') AND ([m].[HasSoulPatch] = 0)) AND (@_outer_Id = [m].[SquadId])");
+        }
+
+        public override void Correlated_collections_on_left_join_with_predicate()
+        {
+            base.Correlated_collections_on_left_join_with_predicate();
+
+            AssertSql(
+                @"SELECT [t0].[Nickname], [t0].[FullName]
+FROM [Tags] AS [t]
+LEFT JOIN (
+    SELECT [g].*
+    FROM [Gears] AS [g]
+    WHERE [g].[Discriminator] IN (N'Officer', N'Gear')
+) AS [t0] ON [t].[GearNickName] = [t0].[Nickname]
+WHERE ([t0].[HasSoulPatch] <> 1) OR [t0].[HasSoulPatch] IS NULL
+ORDER BY [t0].[Nickname], [t0].[SquadId], [t0].[FullName]",
+                //
+                @"SELECT [t3].[Nickname], [t3].[SquadId], [t3].[FullName], [g.Weapons].[Name], [g.Weapons].[OwnerFullName]
+FROM [Weapons] AS [g.Weapons]
+INNER JOIN (
+    SELECT [t2].[Nickname], [t2].[SquadId], [t2].[FullName]
+    FROM [Tags] AS [t1]
+    LEFT JOIN (
+        SELECT [g0].*
+        FROM [Gears] AS [g0]
+        WHERE [g0].[Discriminator] IN (N'Officer', N'Gear')
+    ) AS [t2] ON [t1].[GearNickName] = [t2].[Nickname]
+    WHERE ([t2].[HasSoulPatch] <> 1) OR [t2].[HasSoulPatch] IS NULL
+) AS [t3] ON [g.Weapons].[OwnerFullName] = [t3].[FullName]
+ORDER BY [t3].[Nickname], [t3].[SquadId], [t3].[FullName]");
+        }
+
+        public override void Correlated_collections_on_left_join_with_null_value()
+        {
+            base.Correlated_collections_on_left_join_with_null_value();
+
+            AssertSql(
                 @"");
         }
+
+        public override void Correlated_collection_deeply_nested_left_join()
+        {
+            base.Correlated_collection_deeply_nested_left_join();
+
+            AssertSql(
+                @"");
+        }
+
+        public override void Correlated_collection_deeply_nested_left_join2()
+        {
+            base.Correlated_collection_deeply_nested_left_join2();
+
+            AssertSql(
+                @"");
+        }
+
+        public override void Correlated_collections_from_left_join_with_additional_elements_projected_of_that_join()
+        {
+            base.Correlated_collections_from_left_join_with_additional_elements_projected_of_that_join();
+
+            AssertSql(
+                @"");
+        }
+        // correlated collection in additional from clause (select many)
+        // correlated collection in join clause?
+
+
+        //public override void Broken()
+        //{
+        //    base.Broken();
+
+        //    AssertSql(@"");
+        //}
+        public override void Broken2()
+        {
+            base.Broken2();
+
+            AssertSql(
+                @"");
+
+        }
+
+
+        public override void Broken3()
+        {
+            base.Broken3();
+
+            AssertSql(
+                @"SELECT [r].[FullName]
+FROM [Gears] AS [r]
+WHERE [r].[Discriminator] IN (N'Officer', N'Gear')
+ORDER BY [r].[Nickname], [r].[SquadId], [r].[FullName]",
+                //
+                @"SELECT [t0].[Nickname], [t0].[SquadId], [t0].[FullName], [r.Weapons].[Id] AS [Id0], [w.Owner.Squad].[Id], [r.Weapons].[OwnerFullName]
+FROM [Weapons] AS [r.Weapons]
+LEFT JOIN (
+    SELECT [w.Owner].*
+    FROM [Gears] AS [w.Owner]
+    WHERE [w.Owner].[Discriminator] IN (N'Officer', N'Gear')
+) AS [t] ON [r.Weapons].[OwnerFullName] = [t].[FullName]
+LEFT JOIN [Squads] AS [w.Owner.Squad] ON [t].[SquadId] = [w.Owner.Squad].[Id]
+INNER JOIN (
+    SELECT [r0].[Nickname], [r0].[SquadId], [r0].[FullName]
+    FROM [Gears] AS [r0]
+    WHERE [r0].[Discriminator] IN (N'Officer', N'Gear')
+) AS [t0] ON [r.Weapons].[OwnerFullName] = [t0].[FullName]
+ORDER BY [t0].[Nickname], [t0].[SquadId], [t0].[FullName], [r.Weapons].[Id], [w.Owner.Squad].[Id]",
+                //
+                @"SELECT [t3].[Nickname], [t3].[SquadId], [t3].[FullName], [t3].[Id], [t3].[Id0], [w.Owner.Squad.Members].[Nickname] AS [Nickname0], [w.Owner.Squad.Members].[HasSoulPatch], [w.Owner.Squad.Members].[SquadId]
+FROM [Gears] AS [w.Owner.Squad.Members]
+INNER JOIN (
+    SELECT [t2].[Nickname], [t2].[SquadId], [t2].[FullName], [r.Weapons0].[Id], [w.Owner.Squad0].[Id] AS [Id0]
+    FROM [Weapons] AS [r.Weapons0]
+    LEFT JOIN (
+        SELECT [w.Owner0].*
+        FROM [Gears] AS [w.Owner0]
+        WHERE [w.Owner0].[Discriminator] IN (N'Officer', N'Gear')
+    ) AS [t1] ON [r.Weapons0].[OwnerFullName] = [t1].[FullName]
+    LEFT JOIN [Squads] AS [w.Owner.Squad0] ON [t1].[SquadId] = [w.Owner.Squad0].[Id]
+    INNER JOIN (
+        SELECT [r1].[Nickname], [r1].[SquadId], [r1].[FullName]
+        FROM [Gears] AS [r1]
+        WHERE [r1].[Discriminator] IN (N'Officer', N'Gear')
+    ) AS [t2] ON [r.Weapons0].[OwnerFullName] = [t2].[FullName]
+) AS [t3] ON [w.Owner.Squad.Members].[SquadId] = [t3].[Id0]
+WHERE [w.Owner.Squad.Members].[Discriminator] IN (N'Officer', N'Gear')
+ORDER BY [t3].[Nickname], [t3].[SquadId], [t3].[FullName], [t3].[Id], [t3].[Id0], [Nickname0]");
+        }
+
 
         private void AssertSql(params string[] expected)
             => Fixture.TestSqlLoggerFactory.AssertBaseline(expected);

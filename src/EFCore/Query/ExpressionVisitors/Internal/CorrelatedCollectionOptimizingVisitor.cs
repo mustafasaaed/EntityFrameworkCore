@@ -215,15 +215,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                         foreignKeyProperties,
                         (outer, inner) =>
                         {
-                                //Expression outerKeyAccess =
-                                //    Expression.Convert(
-                                //        Expression.Call(
-                                //            outerKeyParameter,
-                                //            AnonymousObject.GetValueMethodInfo,
-                                //            Expression.Constant(outer.i)),
-                                //        primaryKeyProperties[outer.i].ClrType);
-
-                                var outerKeyAccess =
+                            var outerKeyAccess =
                                 Expression.Call(
                                     outerKeyParameter,
                                     AnonymousObject2.GetValueMethodInfo,
@@ -234,15 +226,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                                     outerKeyAccess,
                                     primaryKeyProperties[outer.i].ClrType);
 
-                                //Expression innerKeyAccess =
-                                //    Expression.Convert(
-                                //        Expression.Call(
-                                //            innerKeyParameter,
-                                //            AnonymousObject.GetValueMethodInfo,
-                                //            Expression.Constant(outer.i)),
-                                //        foreignKeyProperties[outer.i].ClrType);
-
-                                var innerKeyAccess =
+                            var innerKeyAccess =
                                 Expression.Call(
                                     innerKeyParameter,
                                     AnonymousObject2.GetValueMethodInfo,
@@ -253,30 +237,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                                     innerKeyAccess,
                                     foreignKeyProperties[outer.i].ClrType);
 
-
-
-
-
-
-
-                                //Expression equalityExpression;
-                                //if (outerKeyAccess.Type != innerKeyAccess.Type)
-                                //{
-                                //    if (outerKeyAccess.Type.IsNullableType())
-                                //    {
-                                //        innerKeyAccess = Expression.Convert(innerKeyAccess, outerKeyAccess.Type);
-                                //    }
-                                //    else
-                                //    {
-                                //        outerKeyAccess = Expression.Convert(outerKeyAccess, innerKeyAccess.Type);
-                                //    }
-                                //}
-
-
-
-
-
-                                Expression equalityExpression;
+                            Expression equalityExpression;
                             if (typedOuterKeyAccess.Type != typedInnerKeyAccess.Type)
                             {
                                 if (typedOuterKeyAccess.Type.IsNullableType())
@@ -289,40 +250,27 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                                 }
                             }
 
+                            equalityExpression = Expression.Equal(typedOuterKeyAccess, typedInnerKeyAccess);
 
-
-
-
-
-
-
-
-
-
-
-
-                                //if (typeof(IStructuralEquatable).GetTypeInfo()
-                                //    .IsAssignableFrom(pkMemberAccess.Type.GetTypeInfo()))
-                                //{
-                                //    equalityExpression
-                                //        = Expression.Call(_structuralEqualsMethod, pkMemberAccess, fkMemberAccess);
-                                //}
-                                //else
-                                {
-                                    //equalityExpression = Expression.Equal(outerKeyAccess, innerKeyAccess);
-                                    equalityExpression = Expression.Equal(typedOuterKeyAccess, typedInnerKeyAccess);
-                            }
-
-                            return inner.ClrType.IsNullableType()
-                                ? Expression.Condition(
+                            return 
+                                (Expression)Expression.Condition(
                                     Expression.OrElse(
                                         Expression.Equal(innerKeyAccess, Expression.Default(innerKeyAccess.Type)),
-                                        Expression.Equal(outerKeyAccess, Expression.Default(outerKeyAccess.Type)))
-                                        ,
-                                    //Expression.Equal(innerKeyAccess, Expression.Constant(null)),
+                                        Expression.Equal(outerKeyAccess, Expression.Default(outerKeyAccess.Type))),
                                     Expression.Constant(false),
-                                    equalityExpression)
-                                : equalityExpression;
+                                    equalityExpression);
+
+
+                            //return inner.ClrType.IsNullableType()
+                            //    ? Expression.Condition(
+                            //        Expression.OrElse(
+                            //            Expression.Equal(innerKeyAccess, Expression.Default(innerKeyAccess.Type)),
+                            //            Expression.Equal(outerKeyAccess, Expression.Default(outerKeyAccess.Type)))
+                            //            ,
+                            //        //Expression.Equal(innerKeyAccess, Expression.Constant(null)),
+                            //        Expression.Constant(false),
+                            //        equalityExpression)
+                            //    : equalityExpression;
                         })
                     .Aggregate((e1, e2) => Expression.AndAlso(e1, e2)),
                 outerKeyParameter,
@@ -799,7 +747,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             return lastResultOperator;
         }
 
-        private static QuerySourceReferenceExpression CreateJoinToParentQuery2(
+        private QuerySourceReferenceExpression CreateJoinToParentQuery2(
             QueryModel parentQueryModel,
             QuerySourceReferenceExpression parentQuerySourceReferenceExpression,
             Expression outerTargetExpression,
@@ -835,17 +783,25 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                         if (projectionExpression is MethodCallExpression methodCall
                             && methodCall.Method.IsEFPropertyMethod())
                         {
-                            var properyQsre = (QuerySourceReferenceExpression)methodCall.Arguments[0];
+                            var propertyQsre = (QuerySourceReferenceExpression)methodCall.Arguments[0];
                             var propertyName = (string)((ConstantExpression)methodCall.Arguments[1]).Value;
 
-                            return propertyName == principalKeyProperty.Name;  // this cant work! (what if same name appears twice?)
+                            var propertyQsreEntityType = _queryCompilationContext.Model.FindEntityType(propertyQsre.Type); // what about owned types?
+
+                            return propertyQsreEntityType.RootType() == principalKeyProperty.DeclaringEntityType.RootType() 
+                                //principalKeyProperty.DeclaringEntityType.ClrType == propertyQsre.Type
+                                && propertyName == principalKeyProperty.Name; // TODO: improve this? (go via entitymodel?)
                         }
 
                         if (projectionExpression is MemberExpression projectionMemberExpression)
                         {
                             var projectionMemberQsre = (QuerySourceReferenceExpression)projectionMemberExpression.Expression;
+                            var projectionMemberQsreEntityType = _queryCompilationContext.Model.FindEntityType(projectionMemberQsre.Type);
 
-                            return projectionMemberExpression.Member.Name == principalKeyProperty.Name; // this cant work! (what if same name appears twice?)
+
+                            return projectionMemberQsreEntityType.RootType() == principalKeyProperty.DeclaringEntityType.RootType() // what about owned types?
+                                //principalKeyProperty.DeclaringEntityType.ClrType == projectionMemberQsre.Type
+                                && projectionMemberExpression.Member.Name == principalKeyProperty.Name; // TODO: improve this? (go via entitymodel?)
                         }
 
                         return false;

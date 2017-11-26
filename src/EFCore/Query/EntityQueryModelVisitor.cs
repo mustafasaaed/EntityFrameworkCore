@@ -1003,9 +1003,8 @@ namespace Microsoft.EntityFrameworkCore.Query
         ///     Optimizes correlated collection navigations when possible
         /// </summary>
         /// <param name="queryModel"> Query model to run optimizations on. </param>
-        /// <param name="trackResults"> Value indicating whether results of the query should be tracked. </param>
         /// <returns> True if the query model was optimized, false otherwise. </returns>
-        protected virtual bool TryOptimizeCorrelatedCollections(QueryModel queryModel, bool trackResults)
+        protected virtual bool TryOptimizeCorrelatedCollections(QueryModel queryModel)
         {
             var correlatedCollectionOptimizer = new CorrelatedCollectionOptimizingVisitor(
                 QueryCompilationContext, 
@@ -1046,7 +1045,7 @@ namespace Microsoft.EntityFrameworkCore.Query
             // TODO: for now optimization only works for sync queries
             if (QueryCompilationContext.LinqOperatorProvider.Select.ReturnType.GetGenericTypeDefinition() != typeof(IAsyncEnumerable<>))
             {
-                optimizedCorrelatedCollections = TryOptimizeCorrelatedCollections(queryModel, TrackResults(queryModel));
+                optimizedCorrelatedCollections = TryOptimizeCorrelatedCollections(queryModel);
             }
 
             var selector
