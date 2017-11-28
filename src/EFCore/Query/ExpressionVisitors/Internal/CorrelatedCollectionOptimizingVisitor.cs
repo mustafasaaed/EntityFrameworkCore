@@ -301,6 +301,13 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                     propertyExpression),
                 propertyExpression.Type);
 
+            //if (!orderings.Any(o =>
+            //    _expressionEqualityComparer.Equals(o.Expression, orderingExpression)
+            //    || MatchingPropertyExpressions(o.Expression, propertyExpression)))
+            //{
+            //    orderings.Add(new Ordering(orderingExpression, OrderingDirection.Asc));
+            //}
+
             if (!orderings.Any(
                 o => _expressionEqualityComparer.Equals(o.Expression, orderingExpression)
                      || (o.Expression.RemoveConvert() is MemberExpression memberExpression1
@@ -313,6 +320,57 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             {
                 orderings.Add(new Ordering(orderingExpression, OrderingDirection.Asc));
             }
+        }
+
+
+        private bool MatchingPropertyExpressions(Expression expression1, Expression expression2)
+        {
+            var propertyExpression1 = (expression1.RemoveConvert() as NullConditionalExpression)?.AccessOperation
+                                              ?? expression1.RemoveConvert();
+
+            var propertyExpression2 = (expression2.RemoveConvert() as NullConditionalExpression)?.AccessOperation
+                                              ?? expression2.RemoveConvert();
+
+            QuerySourceReferenceExpression qsre1 = null;
+            QuerySourceReferenceExpression qsre2 = null;
+            string name1 = null;
+            string name2 = null;
+
+
+            //QuerySourceReferenceExpression projectionQsre = null;
+            //QuerySourceReferenceExpression argumentQsre = null;
+            //string projectionName = null;
+            //string argumentName = null;
+
+            if (propertyExpression1 is MethodCallExpression methodCallExpression1
+               && methodCallExpression1.IsEFProperty())
+            {
+                qsre1 = methodCallExpression1.Arguments[0] as QuerySourceReferenceExpression;
+                name1 = (methodCallExpression1.Arguments[1] as ConstantExpression)?.Value as string;
+            }
+            else if (propertyExpression1 is MemberExpression memberExpression1)
+            {
+                qsre1 = memberExpression1.Expression as QuerySourceReferenceExpression;
+                name1 = memberExpression1.Member.Name;
+            }
+
+            if (propertyExpression2 is MethodCallExpression methodCallExpression2
+               && methodCallExpression2.IsEFProperty())
+            {
+                qsre2 = methodCallExpression2.Arguments[0] as QuerySourceReferenceExpression;
+                name2 = (methodCallExpression2.Arguments[1] as ConstantExpression)?.Value as string;
+            }
+            else if (propertyExpression2 is MemberExpression memberExpression2)
+            {
+                qsre2 = memberExpression2.Expression as QuerySourceReferenceExpression;
+                name2 = memberExpression2.Member.Name;
+            }
+
+            return qsre1?.ReferencedQuerySource == qsre2?.ReferencedQuerySource
+               && name1 == name2;
+
+            //return projectionQsre?.ReferencedQuerySource == argumentQsre?.ReferencedQuerySource
+            //   && projectionName == argumentName;
         }
 
         private Expression Rewrite2(int correlatedCollectionIndex, QueryModel collectionQueryModel, INavigation navigation, QuerySourceReferenceExpression originQuerySource)
@@ -663,46 +721,46 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             return false;
         }
 
-        private static void BuildParentOrderings(
-            QueryModel queryModel,
-            INavigation navigation,
-            QuerySourceReferenceExpression querySourceReferenceExpression,
-            ICollection<Ordering> parentOrderings)
-        {
-            var orderings = parentOrderings;
+        //private static void BuildParentOrderings(
+        //    QueryModel queryModel,
+        //    INavigation navigation,
+        //    QuerySourceReferenceExpression querySourceReferenceExpression,
+        //    ICollection<Ordering> parentOrderings)
+        //{
+        //    var orderings = parentOrderings;
 
-            var orderByClause
-                = queryModel.BodyClauses.OfType<OrderByClause>().LastOrDefault();
+        //    var orderByClause
+        //        = queryModel.BodyClauses.OfType<OrderByClause>().LastOrDefault();
 
-            if (orderByClause != null)
-            {
-                orderings = orderings.Concat(orderByClause.Orderings).ToArray();
-            }
+        //    if (orderByClause != null)
+        //    {
+        //        orderings = orderings.Concat(orderByClause.Orderings).ToArray();
+        //    }
 
-            foreach (var property in navigation.ForeignKey.PrincipalKey.Properties)
-            {
-                var propertyExpression = querySourceReferenceExpression.CreateEFPropertyExpression(property);
+        //    foreach (var property in navigation.ForeignKey.PrincipalKey.Properties)
+        //    {
+        //        var propertyExpression = querySourceReferenceExpression.CreateEFPropertyExpression(property);
 
-                var orderingExpression = Expression.Convert(
-                    new NullConditionalExpression(
-                        querySourceReferenceExpression,
-                        propertyExpression),
-                    propertyExpression.Type);
+        //        var orderingExpression = Expression.Convert(
+        //            new NullConditionalExpression(
+        //                querySourceReferenceExpression,
+        //                propertyExpression),
+        //            propertyExpression.Type);
 
-                if (!orderings.Any(
-                    o => _expressionEqualityComparer.Equals(o.Expression, orderingExpression)
-                         || (o.Expression.RemoveConvert() is MemberExpression memberExpression1
-                             && propertyExpression is MethodCallExpression methodCallExpression
-                             && MatchEfPropertyToMemberExpression(memberExpression1, methodCallExpression))
-                         || (o.Expression.RemoveConvert() is NullConditionalExpression nullConditionalExpression
-                             && nullConditionalExpression.AccessOperation is MemberExpression memberExpression
-                             && propertyExpression is MethodCallExpression methodCallExpression1
-                             && MatchEfPropertyToMemberExpression(memberExpression, methodCallExpression1))))
-                {
-                    parentOrderings.Add(new Ordering(orderingExpression, OrderingDirection.Asc));
-                }
-            }
-        }
+        //        if (!orderings.Any(
+        //            o => _expressionEqualityComparer.Equals(o.Expression, orderingExpression)
+        //                 || (o.Expression.RemoveConvert() is MemberExpression memberExpression1
+        //                     && propertyExpression is MethodCallExpression methodCallExpression
+        //                     && MatchEfPropertyToMemberExpression(memberExpression1, methodCallExpression))
+        //                 || (o.Expression.RemoveConvert() is NullConditionalExpression nullConditionalExpression
+        //                     && nullConditionalExpression.AccessOperation is MemberExpression memberExpression
+        //                     && propertyExpression is MethodCallExpression methodCallExpression1
+        //                     && MatchEfPropertyToMemberExpression(memberExpression, methodCallExpression1))))
+        //        {
+        //            parentOrderings.Add(new Ordering(orderingExpression, OrderingDirection.Asc));
+        //        }
+        //    }
+        //}
 
         private static bool ProcessResultOperators(QueryModel queryModel, bool isInclude)
         {

@@ -3577,6 +3577,45 @@ namespace Microsoft.EntityFrameworkCore.Query
         }
 
         [ConditionalFact]
+        public virtual void Correlated_collections_left_join_with_self_reference()
+        {
+            using (var ctx = CreateContext())
+            {
+                var q = from t in ctx.Tags
+                        join o in ctx.Gears.OfType<Officer>() on t.GearNickName equals o.Nickname into grouping
+                        from o in grouping.DefaultIfEmpty()
+                        select o.Reports.Select(r => r.FullName);
+
+
+
+                //var q = from t in ctx.Tags
+                //        join o in ctx.Gears.OfType<Officer>() on t.GearNickName equals o.Nickname into grouping
+                //        from o in grouping.DefaultIfEmpty()
+                //        select o.Weapons.Select(r => r.Name);
+
+
+
+                //var q = from t in ctx.Tags
+                //        join o in ctx.Gears on t.GearNickName equals o.Nickname into grouping
+                //        from o in grouping.DefaultIfEmpty()
+                //        where o is Officer
+                //        select ((Officer)o).Reports.Where(r => r.HasSoulPatch).Select(r => r.Weapons.Where(w => w.IsAutomatic));
+
+
+                var res = q.ToList();
+                foreach (var rr in res)
+                {
+                    rr.ToList();
+                    //foreach (var rrr in rr)
+                    //{
+                    //    rrr.ToList();
+                    //}
+                }
+            }
+        }
+
+
+        [ConditionalFact]
         public virtual void Correlated_collection_deeply_nested_left_join()
         {
             using (var ctx = CreateContext())
@@ -3619,7 +3658,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                 var q = from t in ctx.Tags
                         join o in ctx.Gears.OfType<Officer>() on t.GearNickName equals o.Nickname into grouping
                         from o in grouping.DefaultIfEmpty()
-                        select o.Reports.Where(r => r.HasSoulPatch).Select(r => r.Weapons.Where(w => w.IsAutomatic));
+                        select o.Reports.Where(r => r.HasSoulPatch).Select(r => r.FullName /*r.Weapons.Where(w => w.IsAutomatic)*/);
 
 
                 //var q = from t in ctx.Tags
@@ -3633,10 +3672,10 @@ namespace Microsoft.EntityFrameworkCore.Query
                 foreach (var rr in res)
                 {
                     rr.ToList();
-                    foreach (var rrr in rr)
-                    {
-                        rrr.ToList();
-                    }
+                    //foreach (var rrr in rr)
+                    //{
+                    //    rrr.ToList();
+                    //}
                 }
 
 
@@ -3766,6 +3805,27 @@ namespace Microsoft.EntityFrameworkCore.Query
 
 
 
+        [ConditionalFact]
+        public virtual void Correlated_collections_fubar()
+        {
+            using (var ctx = CreateContext())
+            {
+
+                var query = from g in ctx.Gears.Include(gg => gg.Weapons)
+                            from s in ctx.Squads.Include(sss => sss.Members)
+                            where g.HasSoulPatch
+                            orderby g.Nickname, s.Id descending
+                            select new
+                            {
+                                GearNickname = g.Nickname,
+                                SquadName = s.Name,
+                                g,
+                                s
+                            };
+
+                var result = query.ToList();
+            }
+        }
 
 
 

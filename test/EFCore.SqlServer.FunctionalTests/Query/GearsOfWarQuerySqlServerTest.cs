@@ -4926,6 +4926,14 @@ ORDER BY [t3].[Nickname], [t3].[SquadId], [t3].[FullName]");
                 @"");
         }
 
+        public override void Correlated_collections_left_join_with_self_reference()
+        {
+            base.Correlated_collections_left_join_with_self_reference();
+
+            AssertSql(
+                @"");
+        }
+
         public override void Correlated_collection_deeply_nested_left_join()
         {
             base.Correlated_collection_deeply_nested_left_join();
@@ -5015,6 +5023,40 @@ WHERE [w.Owner.Squad.Members].[Discriminator] IN (N'Officer', N'Gear')
 ORDER BY [t3].[Nickname], [t3].[SquadId], [t3].[FullName], [t3].[Id], [t3].[Id0], [Nickname0]");
         }
 
+
+        public override void Correlated_collections_fubar()
+        {
+            base.Correlated_collections_fubar();
+
+            AssertSql(
+                @"SELECT [gg].[Nickname], [gg].[SquadId], [gg].[AssignedCityName], [gg].[CityOrBirthName], [gg].[Discriminator], [gg].[FullName], [gg].[HasSoulPatch], [gg].[LeaderNickname], [gg].[LeaderSquadId], [gg].[Rank], [sss].[Id], [sss].[InternalNumber], [sss].[Name]
+FROM [Gears] AS [gg]
+CROSS JOIN [Squads] AS [sss]
+WHERE [gg].[Discriminator] IN (N'Officer', N'Gear') AND ([gg].[HasSoulPatch] = 1)
+ORDER BY [gg].[Nickname], [sss].[Id] DESC, [gg].[FullName]",
+                //
+                @"SELECT [gg.Weapons].[Id], [gg.Weapons].[AmmunitionType], [gg.Weapons].[IsAutomatic], [gg.Weapons].[Name], [gg.Weapons].[OwnerFullName], [gg.Weapons].[SynergyWithId]
+FROM [Weapons] AS [gg.Weapons]
+INNER JOIN (
+    SELECT DISTINCT [gg0].[FullName], [gg0].[Nickname], [sss0].[Id]
+    FROM [Gears] AS [gg0]
+    CROSS JOIN [Squads] AS [sss0]
+    WHERE [gg0].[Discriminator] IN (N'Officer', N'Gear') AND ([gg0].[HasSoulPatch] = 1)
+) AS [t] ON [gg.Weapons].[OwnerFullName] = [t].[FullName]
+ORDER BY [t].[Nickname], [t].[Id] DESC, [t].[FullName]",
+                //
+                @"SELECT [sss.Members].[Nickname], [sss.Members].[SquadId], [sss.Members].[AssignedCityName], [sss.Members].[CityOrBirthName], [sss.Members].[Discriminator], [sss.Members].[FullName], [sss.Members].[HasSoulPatch], [sss.Members].[LeaderNickname], [sss.Members].[LeaderSquadId], [sss.Members].[Rank]
+FROM [Gears] AS [sss.Members]
+INNER JOIN (
+    SELECT DISTINCT [sss1].[Id], [gg1].[Nickname], [gg1].[FullName]
+    FROM [Gears] AS [gg1]
+    CROSS JOIN [Squads] AS [sss1]
+    WHERE [gg1].[Discriminator] IN (N'Officer', N'Gear') AND ([gg1].[HasSoulPatch] = 1)
+) AS [t0] ON [sss.Members].[SquadId] = [t0].[Id]
+WHERE [sss.Members].[Discriminator] IN (N'Officer', N'Gear')
+ORDER BY [t0].[Nickname], [t0].[Id] DESC, [t0].[FullName]");
+
+        }
 
         private void AssertSql(params string[] expected)
             => Fixture.TestSqlLoggerFactory.AssertBaseline(expected);
