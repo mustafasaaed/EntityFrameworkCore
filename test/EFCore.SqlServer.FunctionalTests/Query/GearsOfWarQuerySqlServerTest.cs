@@ -4525,7 +4525,60 @@ ORDER BY [t1].[Id], [t1].[SquadId], [t1].[MissionId], [t1].[Id0]");
             base.Correlated_collections_nested_mixed_streaming_with_buffer1();
 
             AssertSql(
-                @"");
+                @"SELECT [s].[Id]
+FROM [Squads] AS [s]",
+                //
+                @"@_outer_Id='1'
+
+SELECT [m.Mission].[Id]
+FROM [SquadMissions] AS [m]
+INNER JOIN [Missions] AS [m.Mission] ON [m].[MissionId] = [m.Mission].[Id]
+WHERE ([m].[MissionId] < 3) AND (@_outer_Id = [m].[SquadId])",
+                //
+                @"@_outer_Id1='1'
+
+SELECT [ps].[SquadId], [ps].[MissionId]
+FROM [SquadMissions] AS [ps]
+WHERE ([ps].[SquadId] < 2) AND (@_outer_Id1 = [ps].[MissionId])",
+                //
+                @"@_outer_Id1='2'
+
+SELECT [ps].[SquadId], [ps].[MissionId]
+FROM [SquadMissions] AS [ps]
+WHERE ([ps].[SquadId] < 2) AND (@_outer_Id1 = [ps].[MissionId])",
+                //
+                @"@_outer_Id='2'
+
+SELECT [m.Mission].[Id]
+FROM [SquadMissions] AS [m]
+INNER JOIN [Missions] AS [m.Mission] ON [m].[MissionId] = [m.Mission].[Id]
+WHERE ([m].[MissionId] < 3) AND (@_outer_Id = [m].[SquadId])",
+                //
+                @"@_outer_Id='2'
+
+SELECT [m.Mission].[Id]
+FROM [SquadMissions] AS [m]
+INNER JOIN [Missions] AS [m.Mission] ON [m].[MissionId] = [m.Mission].[Id]
+WHERE ([m].[MissionId] < 3) AND (@_outer_Id = [m].[SquadId])",
+                //
+                @"@_outer_Id='1'
+
+SELECT [m.Mission].[Id]
+FROM [SquadMissions] AS [m]
+INNER JOIN [Missions] AS [m.Mission] ON [m].[MissionId] = [m.Mission].[Id]
+WHERE ([m].[MissionId] < 3) AND (@_outer_Id = [m].[SquadId])",
+                //
+                @"@_outer_Id1='1'
+
+SELECT [ps].[SquadId], [ps].[MissionId]
+FROM [SquadMissions] AS [ps]
+WHERE ([ps].[SquadId] < 2) AND (@_outer_Id1 = [ps].[MissionId])",
+                //
+                @"@_outer_Id1='2'
+
+SELECT [ps].[SquadId], [ps].[MissionId]
+FROM [SquadMissions] AS [ps]
+WHERE ([ps].[SquadId] < 2) AND (@_outer_Id1 = [ps].[MissionId])");
         }
 
         public override void Correlated_collections_nested_mixed_streaming_with_buffer2()

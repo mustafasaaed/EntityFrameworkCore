@@ -73,7 +73,7 @@ namespace Microsoft.EntityFrameworkCore.Query
 
         // TODO: Can these be non-blocking?
         private bool _blockTaskExpressions = true;
-        private bool _useLegacyCorrelatedSubqueries = false;
+        //private bool _useLegacyCorrelatedSubqueries = false;
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="EntityQueryModelVisitor" /> class.
@@ -108,19 +108,19 @@ namespace Microsoft.EntityFrameworkCore.Query
                 = new FilterApplyingExpressionVisitor(
                     _queryCompilationContext, dependencies.QueryModelGenerator);
 
-            ContextOptions = dependencies.ContextOptions;
+            //ContextOptions = dependencies.ContextOptions;
 
-            _useLegacyCorrelatedSubqueries
-                = ContextOptions.Extensions.OfType<CoreOptionsExtension>().Single().UseLegacyCorrelatedSubqueries;
+            //_useLegacyCorrelatedSubqueries
+            //    = ContextOptions.Extensions.OfType<CoreOptionsExtension>().Single().UseLegacyCorrelatedSubqueries;
         }
 
-        /// <summary>
-        ///     Gets the core options for the target context.
-        /// </summary>
-        /// <value>
-        ///     Options for the target context.
-        /// </value>
-        protected virtual IDbContextOptions ContextOptions { get; }
+        ///// <summary>
+        /////     Gets the core options for the target context.
+        ///// </summary>
+        ///// <value>
+        /////     Options for the target context.
+        ///// </value>
+        //protected virtual IDbContextOptions ContextOptions { get; }
 
         /// <summary>
         ///     Gets the expression that represents this query.
@@ -1089,6 +1089,13 @@ namespace Microsoft.EntityFrameworkCore.Query
         }
 
         /// <summary>
+        ///     Determines whether correlated collections (if any) can be optimized.
+        /// </summary>
+        /// <returns>True if optimization is allowed, false otherwise.</returns>
+        protected virtual bool CanOptimizeCorrelatedCollections()
+            => !QueryCompilationContext.IsAsyncQuery;// && !_useLegacyCorrelatedSubqueries
+
+        /// <summary>
         ///     Visits <see cref="SelectClause" /> nodes.
         /// </summary>
         /// <param name="selectClause"> The node being visited. </param>
@@ -1107,7 +1114,7 @@ namespace Microsoft.EntityFrameworkCore.Query
             }
 
             // TODO: for now optimization only works for sync queries
-            if (!QueryCompilationContext.IsAsyncQuery && !_useLegacyCorrelatedSubqueries)
+            if (CanOptimizeCorrelatedCollections())
             {
                 TryOptimizeCorrelatedCollections(queryModel);
             }

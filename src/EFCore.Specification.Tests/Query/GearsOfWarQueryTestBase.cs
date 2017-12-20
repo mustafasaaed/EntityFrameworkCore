@@ -3339,9 +3339,9 @@ namespace Microsoft.EntityFrameworkCore.Query
             AssertQuery<Squad>(
                 ss => from s in ss
                       select (from m in s.Missions
-                              where m.MissionId < 42
+                              where m.MissionId < 3
                               select (from ps in m.Mission.ParticipatingSquads
-                                      where ps.SquadId < 7
+                                      where ps.SquadId < 2
                                       select ps).ToList()),
                 elementSorter: CollectionSorter<object>(),
                 elementAsserter: (e, a) =>

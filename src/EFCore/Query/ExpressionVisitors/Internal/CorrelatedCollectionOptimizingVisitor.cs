@@ -398,18 +398,26 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                     propertyExpression),
                 propertyExpression.Type);
 
+
             if (!orderings.Any(
                 o => _expressionEqualityComparer.Equals(o.Expression, orderingExpression)
-                     || (o.Expression.RemoveConvert() is MemberExpression memberExpression1
-                         && propertyExpression is MethodCallExpression methodCallExpression
-                         && MatchEfPropertyToMemberExpression(memberExpression1, methodCallExpression))
-                     || (o.Expression.RemoveConvert() is NullConditionalExpression nullConditionalExpression
-                         && nullConditionalExpression.AccessOperation is MemberExpression memberExpression
-                         && propertyExpression is MethodCallExpression methodCallExpression1
-                         && MatchEfPropertyToMemberExpression(memberExpression, methodCallExpression1))))
+                    || IsSame(o.Expression, orderingExpression)))
             {
                 orderings.Add(new Ordering(orderingExpression, OrderingDirection.Asc));
             }
+
+            //if (!orderings.Any(
+            //    o => _expressionEqualityComparer.Equals(o.Expression, orderingExpression)
+            //         || (o.Expression.RemoveConvert() is MemberExpression memberExpression1
+            //             && propertyExpression is MethodCallExpression methodCallExpression
+            //             && MatchEfPropertyToMemberExpression(memberExpression1, methodCallExpression))
+            //         || (o.Expression.RemoveConvert() is NullConditionalExpression nullConditionalExpression
+            //             && nullConditionalExpression.AccessOperation is MemberExpression memberExpression
+            //             && propertyExpression is MethodCallExpression methodCallExpression1
+            //             && MatchEfPropertyToMemberExpression(memberExpression, methodCallExpression1))))
+            //{
+            //    orderings.Add(new Ordering(orderingExpression, OrderingDirection.Asc));
+            //}
         }
 
         private static bool MatchEfPropertyToMemberExpression(MemberExpression memberExpression, MethodCallExpression methodCallExpression)
@@ -424,6 +432,58 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 
             return false;
         }
+
+
+
+
+        private bool IsSame(Expression expression1, Expression expression2)
+        {
+            var e = expression1;
+            var originKeyExpression = expression2;
+
+            var expressionWithoutConvert = e.RemoveConvert();
+            var projectionExpression = (expressionWithoutConvert as NullConditionalExpression)?.AccessOperation
+                                              ?? expressionWithoutConvert;
+
+            var argumentWithoutConvert = originKeyExpression.RemoveConvert();
+            var argumentExpression = (argumentWithoutConvert as NullConditionalExpression)?.AccessOperation
+                                              ?? argumentWithoutConvert;
+
+            QuerySourceReferenceExpression projectionQsre = null;
+            QuerySourceReferenceExpression argumentQsre = null;
+            string projectionName = null;
+            string argumentName = null;
+
+            if (projectionExpression is MethodCallExpression projectionMethodCall
+               && projectionMethodCall.IsEFProperty())
+            {
+                projectionQsre = projectionMethodCall.Arguments[0] as QuerySourceReferenceExpression;
+                projectionName = (projectionMethodCall.Arguments[1] as ConstantExpression)?.Value as string;
+            }
+            else if (projectionExpression is MemberExpression projectionMember)
+            {
+                projectionQsre = projectionMember.Expression as QuerySourceReferenceExpression;
+                projectionName = projectionMember.Member.Name;
+            }
+
+            if (argumentExpression is MethodCallExpression argumentMethodCall
+               && argumentMethodCall.IsEFProperty())
+            {
+                argumentQsre = argumentMethodCall.Arguments[0] as QuerySourceReferenceExpression;
+                argumentName = (argumentMethodCall.Arguments[1] as ConstantExpression)?.Value as string;
+            }
+            else if (argumentExpression is MemberExpression argumentMember)
+            {
+                argumentQsre = argumentMember.Expression as QuerySourceReferenceExpression;
+                argumentName = argumentMember.Member.Name;
+            }
+
+            return projectionQsre?.ReferencedQuerySource == argumentQsre?.ReferencedQuerySource
+               && projectionName == argumentName;
+        }
+
+
+
 
         private QuerySourceReferenceExpression CreateJoinToParentQuery(
             QueryModel parentQueryModel,
