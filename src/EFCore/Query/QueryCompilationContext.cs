@@ -68,7 +68,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         /// <summary>
         ///     Mapping between correlated collection query modles and metadata needed to process them
         /// </summary>
-        public virtual Dictionary<QueryModel, CorrelatedSubqueryMetadata> CorrelatedSubqueryMetadataMap { get; } = new Dictionary<QueryModel, CorrelatedSubqueryMetadata>();
+        public virtual Dictionary<MainFromClause, CorrelatedSubqueryMetadata> CorrelatedSubqueryMetadataMap { get; } = new Dictionary<MainFromClause, CorrelatedSubqueryMetadata>();
 
         /// <summary>
         ///     Value indicating whether the current query is asynchronous.
@@ -161,6 +161,19 @@ namespace Microsoft.EntityFrameworkCore.Query
                     {
                         _querySourceEntityTypeMapping[newQuerySource] = entityTypeMapping.Value;
                     }
+                }
+            }
+
+            var newMapping = new Dictionary<MainFromClause, CorrelatedSubqueryMetadata>();
+            foreach (var mappingElement in CorrelatedSubqueryMetadataMap.ToList())
+            {
+                if (querySourceMapping.ContainsMapping(mappingElement.Key))
+                {
+                    var newQuerySource = (MainFromClause)(querySourceMapping.GetExpression(mappingElement.Key) as QuerySourceReferenceExpression)
+                        ?.ReferencedQuerySource;
+
+                    CorrelatedSubqueryMetadataMap[newQuerySource] = mappingElement.Value;
+                    CorrelatedSubqueryMetadataMap.Remove(mappingElement.Key);
                 }
             }
         }

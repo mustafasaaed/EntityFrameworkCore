@@ -81,7 +81,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 
                         if (collectionNavigation != null)
                         {
-                            _queryModelVisitor.QueryCompilationContext.CorrelatedSubqueryMetadataMap[subQueryModel] = new CorrelatedSubqueryMetadata
+                            _queryModelVisitor.QueryCompilationContext.CorrelatedSubqueryMetadataMap[subQueryModel.MainFromClause] = new CorrelatedSubqueryMetadata
                             {
                                 FirstNavigation = properties.OfType<INavigation>().First(),
                                 CollectionNavigation = collectionNavigation,

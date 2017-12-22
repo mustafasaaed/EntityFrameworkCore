@@ -88,10 +88,10 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             }
 
             if (subQueryExpression != null
-                && _queryCompilationContext.CorrelatedSubqueryMetadataMap.TryGetValue(subQueryExpression.QueryModel, out var correlatedSubqueryMetadata))
+                && _queryCompilationContext.CorrelatedSubqueryMetadataMap.TryGetValue(subQueryExpression.QueryModel.MainFromClause, out var correlatedSubqueryMetadata))
             {
                 var parentQsre = new QuerySourceReferenceExpression(correlatedSubqueryMetadata.ParentQuerySource);
-                var correlatedCollectionIndex = _queryCompilationContext.CorrelatedSubqueryMetadataMap.Keys.IndexOf(subQueryExpression.QueryModel);
+                var correlatedCollectionIndex = _queryCompilationContext.CorrelatedSubqueryMetadataMap.Keys.IndexOf(subQueryExpression.QueryModel.MainFromClause);
 
                 var result = Rewrite(correlatedCollectionIndex, subQueryExpression.QueryModel, correlatedSubqueryMetadata.CollectionNavigation, parentQsre);
 
@@ -155,11 +155,11 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 
         private Expression Rewrite(int correlatedCollectionIndex, QueryModel collectionQueryModel, INavigation navigation, QuerySourceReferenceExpression originQuerySource)
         {
-            var collectionQueryModelQuerySourceMapping = new QuerySourceMapping();
-            var clonedCollectionQueryModel = collectionQueryModel.Clone(collectionQueryModelQuerySourceMapping);
-            _queryCompilationContext.UpdateMapping(collectionQueryModelQuerySourceMapping);
-            _queryCompilationContext.CloneAnnotations(collectionQueryModelQuerySourceMapping, clonedCollectionQueryModel);
-            collectionQueryModel = clonedCollectionQueryModel;
+            //var collectionQueryModelQuerySourceMapping = new QuerySourceMapping();
+            //var clonedCollectionQueryModel = collectionQueryModel.Clone(collectionQueryModelQuerySourceMapping);
+            //_queryCompilationContext.UpdateMapping(collectionQueryModelQuerySourceMapping);
+            //_queryCompilationContext.CloneAnnotations(collectionQueryModelQuerySourceMapping, clonedCollectionQueryModel);
+            //collectionQueryModel = clonedCollectionQueryModel;
 
             var querySourceReferenceFindingExpressionTreeVisitor
                 = new QuerySourceReferenceFindingExpressionTreeVisitor();
