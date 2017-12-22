@@ -1069,6 +1069,15 @@ namespace Microsoft.EntityFrameworkCore.Query
                 return false;
             }
 
+            if (RequiresClientEval
+                || RequiresClientFilter
+                || RequiresClientJoin
+                || RequiresClientOrderBy
+                || RequiresClientSelectMany)
+            {
+                return false;
+            }
+
             var injectParametersFinder = new InjectParametersFindingVisitor(QueryCompilationContext.QueryMethodProvider.InjectParametersMethod);
             injectParametersFinder.Visit(Expression);
 
@@ -1095,28 +1104,6 @@ namespace Microsoft.EntityFrameworkCore.Query
 
                 return base.VisitMethodCall(node);
             }
-        }
-
-        /// <summary>
-        ///     Optimizes correlated collection navigations when possible
-        /// </summary>
-        /// <param name="queryModel"> Query model to run optimizations on. </param>
-        /// <returns> True if the query model was optimized, false otherwise. </returns>
-        protected override bool TryOptimizeCorrelatedCollections(QueryModel queryModel)
-        {
-            var canOptimizeCorrelatedCollections
-                = !RequiresClientEval
-                   && !RequiresClientSelectMany
-                   && !RequiresClientJoin
-                   && !RequiresClientFilter
-                   && !RequiresClientOrderBy;
-
-            if (!canOptimizeCorrelatedCollections)
-            {
-                return false;
-            }
-
-            return base.TryOptimizeCorrelatedCollections(queryModel);
         }
 
         /// <summary>

@@ -107,6 +107,26 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         /////     This API supports the Entity Framework Core infrastructure and is not intended to be used
         /////     directly from your code. This API may change or be removed in future releases.
         ///// </summary>
+        //protected override Expression VisitNew(NewExpression expression)
+        //{
+        //    var newArguments = new List<Expression>();
+
+        //    foreach (var argument in expression.Arguments)
+        //    {
+        //        var newArgument = Visit(argument);
+
+        //        newArguments.Add(newArgument);
+        //    }
+
+        //    return expression.Update(newArguments);
+        //    //return base.VisitNew(expression);
+        //}
+
+
+        ///// <summary>
+        /////     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        /////     directly from your code. This API may change or be removed in future releases.
+        ///// </summary>
         //protected override Expression VisitSubQuery(SubQueryExpression subQueryExpression)
         //{
         //    if (_queryCompilationContext.CorrelatedSubqueryMetadataMap.TryGetValue(subQueryExpression.QueryModel, out var correlatedSubqueryMetadata))
@@ -135,11 +155,28 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 
         private Expression Rewrite(int correlatedCollectionIndex, QueryModel collectionQueryModel, INavigation navigation, QuerySourceReferenceExpression originQuerySource)
         {
+            var collectionQueryModelQuerySourceMapping = new QuerySourceMapping();
+            var clonedCollectionQueryModel = collectionQueryModel.Clone(collectionQueryModelQuerySourceMapping);
+            _queryCompilationContext.UpdateMapping(collectionQueryModelQuerySourceMapping);
+            _queryCompilationContext.CloneAnnotations(collectionQueryModelQuerySourceMapping, clonedCollectionQueryModel);
+            collectionQueryModel = clonedCollectionQueryModel;
+
             var querySourceReferenceFindingExpressionTreeVisitor
                 = new QuerySourceReferenceFindingExpressionTreeVisitor();
 
             var originalCorrelationPredicate = collectionQueryModel.BodyClauses.OfType<WhereClause>().Single(c => c.Predicate is NullConditionalEqualExpression);
             collectionQueryModel.BodyClauses.Remove(originalCorrelationPredicate);
+
+            //var collectionQueryModelQuerySourceMapping = new QuerySourceMapping();
+            //var clonedCollectionQueryModel = collectionQueryModel.Clone(collectionQueryModelQuerySourceMapping);
+            //_queryCompilationContext.UpdateMapping(collectionQueryModelQuerySourceMapping);
+            //_queryCompilationContext.CloneAnnotations(collectionQueryModelQuerySourceMapping, clonedCollectionQueryModel);
+            //collectionQueryModel = clonedCollectionQueryModel;
+
+
+
+
+
 
             originalCorrelationPredicate.TransformExpressions(querySourceReferenceFindingExpressionTreeVisitor.Visit);
             var parentQuerySourceReferenceExpression = querySourceReferenceFindingExpressionTreeVisitor.QuerySourceReferenceExpression;
@@ -189,8 +226,20 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             // TODO: except the existing ones?
             ParentOrderings.AddRange(parentOrderings);
 
+            //// if selector contains multiple correlated collections, visiting the first one changes that collections QM (changing it's type)
+            //// which makes the parent QM inconsistent temporarily (QM's type is different but the CorrelateCollections method that fixes the result type
+            //// is not part of the QM and it's added only when the entire Selector is replaced - i.e. after all it's components have been visited
+
+            //// since when we clone the parent QM, we don't care about it's original selector anyway (it's being discarded)
+            //// we avoid cloning the selector in the first place and avoid all the potential problem with temporarily mismatched types of the subqueries inside
+            //var parentSelectClause = _parentQueryModel.SelectClause;
+            //_parentQueryModel.SelectClause = new SelectClause(Expression.Default(parentSelectClause.Selector.Type));
+
             var querySourceMapping = new QuerySourceMapping();
             var clonedParentQueryModel = _parentQueryModel.Clone(querySourceMapping);
+
+            //_parentQueryModel.SelectClause = parentSelectClause;
+
             _queryCompilationContext.UpdateMapping(querySourceMapping);
             _queryCompilationContext.CloneAnnotations(querySourceMapping, clonedParentQueryModel);
 

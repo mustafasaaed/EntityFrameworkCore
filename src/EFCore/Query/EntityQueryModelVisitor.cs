@@ -1045,12 +1045,12 @@ namespace Microsoft.EntityFrameworkCore.Query
             return false;
         }
 
-        /// <summary>
-        ///     Optimizes correlated collection navigations when possible
-        /// </summary>
-        /// <param name="queryModel"> Query model to run optimizations on. </param>
-        /// <returns> True if the query model was optimized, false otherwise. </returns>
-        protected virtual bool TryOptimizeCorrelatedCollections([NotNull] QueryModel queryModel)
+        ///////////// <summary>
+        /////////////     Optimizes correlated collection navigations when possible
+        ///////////// </summary>
+        ///////////// <param name="queryModel"> Query model to run optimizations on. </param>
+        ///////////// <returns> True if the query model was optimized, false otherwise. </returns>
+        private bool TryOptimizeCorrelatedCollections([NotNull] QueryModel queryModel)
         {
             //// TODO: disabled for cross joins - problem is outer query containig cross join can produce duplicate results
             if (queryModel.BodyClauses.OfType<AdditionalFromClause>().Where(c => !IsPartOfLeftJoinPattern(c, queryModel)).Any())
